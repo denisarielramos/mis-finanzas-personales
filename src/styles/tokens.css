@@ -1,0 +1,106 @@
+/* ============================================================
+   Tokens de diseño
+   Paleta sobria: un azul muy oscuro como color principal y
+   verde/rojo solo para el signo del dinero.
+   ============================================================ */
+
+:root {
+  /* Superficies */
+  --fondo: #f2f4f7;
+  --superficie: #ffffff;
+  --superficie-2: #f8fafc;
+  --superficie-3: #eef1f5;
+  --superficie-oscura: #0b1220;
+  --superficie-oscura-2: #16213a;
+
+  /* Texto */
+  --texto: #0b1220;
+  --texto-suave: #5b6676;
+  --texto-tenue: #8a94a3;
+  --texto-inverso: #ffffff;
+  --texto-inverso-suave: rgba(255, 255, 255, 0.72);
+
+  /* Bordes y sombras */
+  --borde: #e3e7ee;
+  --borde-fuerte: #cfd6e0;
+  --sombra-suave: 0 1px 2px rgba(11, 18, 32, 0.04), 0 8px 24px rgba(11, 18, 32, 0.05);
+  --sombra-flotante: 0 8px 32px rgba(11, 18, 32, 0.14);
+
+  /* Acentos */
+  --acento: #0b1220;
+  --acento-contraste: #ffffff;
+  --positivo: #05966a;
+  --positivo-suave: #e6f7f0;
+  --negativo: #d1384f;
+  --negativo-suave: #fdeef0;
+  --aviso: #b45309;
+  --aviso-suave: #fdf3e5;
+  --info: #1d4ed8;
+  --info-suave: #eaf0fe;
+
+  /* Medidas */
+  --radio-xs: 8px;
+  --radio-sm: 12px;
+  --radio: 16px;
+  --radio-lg: 22px;
+  --radio-full: 999px;
+
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-5: 20px;
+  --espacio-6: 24px;
+  --espacio-8: 32px;
+  --espacio-10: 40px;
+
+  --ancho-contenido: 720px;
+  --ancho-ancho: 1080px;
+  --alto-barra: 62px;
+  --toque-minimo: 44px;
+
+  /* Áreas seguras de iOS */
+  --seguro-arriba: env(safe-area-inset-top, 0px);
+  --seguro-abajo: env(safe-area-inset-bottom, 0px);
+  --seguro-izq: env(safe-area-inset-left, 0px);
+  --seguro-der: env(safe-area-inset-right, 0px);
+
+  --transicion: 160ms cubic-bezier(0.32, 0.72, 0, 1);
+
+  color-scheme: light;
+}
+
+/* Modo oscuro: los mismos tokens con valores adaptados.
+   La aplicación sigue el ajuste del sistema. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0a0f1a;
+    --superficie: #121a29;
+    --superficie-2: #161f30;
+    --superficie-3: #1c2637;
+    --superficie-oscura: #060a13;
+    --superficie-oscura-2: #121a29;
+
+    --texto: #eef2f8;
+    --texto-suave: #a3aebf;
+    --texto-tenue: #7c879a;
+
+    --borde: #223049;
+    --borde-fuerte: #2e3e5c;
+    --sombra-suave: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --sombra-flotante: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+    --acento: #f1f5fb;
+    --acento-contraste: #0b1220;
+    --positivo: #34d399;
+    --positivo-suave: rgba(52, 211, 153, 0.14);
+    --negativo: #f87f8f;
+    --negativo-suave: rgba(248, 127, 143, 0.14);
+    --aviso: #fbbf5e;
+    --aviso-suave: rgba(251, 191, 94, 0.14);
+    --info: #93b4fd;
+    --info-suave: rgba(147, 180, 253, 0.14);
+
+    color-scheme: dark;
+  }
+}

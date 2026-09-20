@@ -1,0 +1,229 @@
+import { Suspense, lazy, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ChevronRight, Scale, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { Encabezado } from '../components/Encabezado'
+import { SelectorMes } from '../components/SelectorMes'
+import { FilaOperacion } from '../components/FilaOperacion'
+import { EsqueletoLista, EstadoVacio, Mensaje } from '../components/ui/Estados'
+import { Boton } from '../components/ui/Boton'
+import { iconoPorNombre } from '../components/ui/SelectorIcono'
+import { useCatalogo } from '../hooks/useCatalogo'
+import { useCarga } from '../hooks/useCarga'
+import { calcularPatrimonio } from '../services/accountsService'
+import { listarMovimientos, resumenPeriodo } from '../services/movementsService'
+import { agruparOperaciones } from '../utils/movimientos'
+import { capitalizar, mesActual } from '../utils/date'
+import { formatearGs } from '../utils/money'
+
+// El gráfico arrastra la librería de charts: se carga aparte para que la
+// primera pantalla en el móvil sea lo más ligera posible.
+const GraficoGastos = lazy(() =>
+  import('../components/GraficoGastos').then((m) => ({ default: m.GraficoGastos })),
+)
+
+/** Inicio: patrimonio, resumen del mes, cuentas, últimos movimientos y gasto por categoría. */
+export function DashboardPage() {
+  const {
+    saldos,
+    cargando: cargandoCatalogo,
+    error: errorCatalogo,
+    categorias,
+    cuentaPorId,
+  } = useCatalogo()
+  const [mes, setMes] = useState(() => mesActual())
+
+  const resumen = useCarga(
+    () => resumenPeriodo(mes.desde, mes.hasta),
+    [mes.desde, mes.hasta],
+    'No se pudo calcular el resumen del mes.',
+  )
+
+  const ultimos = useCarga(
+    () => listarMovimientos({ limite: 12 }),
+    [],
+    'No se pudieron cargar los últimos movimientos.',
+  )
+
+  const patrimonio = useMemo(() => calcularPatrimonio(saldos), [saldos])
+  const cuentasVisibles = useMemo(
+    () => saldos.filter((s) => s.activa).slice(0, 4),
+    [saldos],
+  )
+  const operaciones = useMemo(
+    () => agruparOperaciones(ultimos.datos ?? []).slice(0, 5),
+    [ultimos.datos],
+  )
+
+  const totalCuentasIncluidas = saldos.filter((s) => s.activa && s.incluir_en_total).length
+
+  return (
+    <>
+      <Encabezado titulo="Mis Finanzas" subtitulo={capitalizar(mes.etiqueta)} ancho />
+
+      <div className="contenedor contenedor--ancho">
+        <SelectorMes rango={mes} onCambio={setMes} />
+
+        {errorCatalogo ? (
+          <div style={{ marginTop: 16 }}>
+            <Mensaje tipo="error">{errorCatalogo}</Mensaje>
+          </div>
+        ) : null}
+
+        <section className="seccion" aria-label="Patrimonio total">
+          <div className="tarjeta tarjeta--oscura patrimonio">
+            <p className="patrimonio__etiqueta">Patrimonio total</p>
+            <p className="patrimonio__monto numero">
+              {cargandoCatalogo ? '—' : formatearGs(patrimonio)}
+            </p>
+            <p className="patrimonio__pie">
+              {totalCuentasIncluidas === 1
+                ? '1 cuenta incluida en el total'
+                : `${totalCuentasIncluidas} cuentas incluidas en el total`}
+            </p>
+          </div>
+        </section>
+
+        <section className="seccion" aria-label="Resumen del mes">
+          <div className="resumen">
+            <div className="resumen__celda">
+              <span className="resumen__etiqueta">
+                <TrendingUp size={13} aria-hidden="true" /> Ingresos
+              </span>
+              <p className="resumen__valor numero texto-positivo">
+                {resumen.cargando ? '—' : formatearGs(resumen.datos?.ingresos ?? 0)}
+              </p>
+            </div>
+            <div className="resumen__celda">
+              <span className="resumen__etiqueta">
+                <TrendingDown size={13} aria-hidden="true" /> Gastos
+              </span>
+              <p className="resumen__valor numero texto-negativo">
+                {resumen.cargando ? '—' : formatearGs(resumen.datos?.gastos ?? 0)}
+              </p>
+            </div>
+            <div className="resumen__celda">
+              <span className="resumen__etiqueta">
+                <Scale size={13} aria-hidden="true" /> Balance
+              </span>
+              <p
+                className={`resumen__valor numero ${(resumen.datos?.balance ?? 0) < 0 ? 'texto-negativo' : ''}`}
+              >
+                {resumen.cargando ? '—' : formatearGs(resumen.datos?.balance ?? 0)}
+              </p>
+            </div>
+          </div>
+          <p className="campo__ayuda" style={{ marginTop: 8 }}>
+            Las transferencias entre tus cuentas no cuentan como ingreso ni como gasto.
+          </p>
+          {resumen.error ? <Mensaje tipo="error">{resumen.error}</Mensaje> : null}
+        </section>
+
+        <div className="rejilla-escritorio">
+          <section className="seccion" aria-label="Mis cuentas">
+            <div className="seccion__cabecera">
+              <h2 className="seccion__titulo">Mis cuentas</h2>
+              <Link className="seccion__enlace" to="/cuentas">
+                Ver todas <ChevronRight size={14} aria-hidden="true" />
+              </Link>
+            </div>
+
+            {cargandoCatalogo ? (
+              <EsqueletoLista filas={3} />
+            ) : cuentasVisibles.length === 0 ? (
+              <EstadoVacio
+                titulo="Todavía no tienes cuentas."
+                texto="Crea tu primera cuenta para empezar a registrar movimientos."
+                icono={<Wallet size={22} aria-hidden="true" />}
+                accion={
+                  <Link to="/cuentas/nueva">
+                    <Boton variante="primario">Crear mi primera cuenta</Boton>
+                  </Link>
+                }
+              />
+            ) : (
+              <ul className="lista">
+                {cuentasVisibles.map((cuenta) => {
+                  const Icono = iconoPorNombre(cuentaPorId(cuenta.id)?.icono, Wallet)
+                  return (
+                    <li key={cuenta.id}>
+                      <Link to="/cuentas" className="lista__item">
+                        <span className="icono-circular" aria-hidden="true">
+                          <Icono size={18} />
+                        </span>
+                        <span className="lista__cuerpo">
+                          <span className="lista__titulo">{cuenta.nombre}</span>
+                          {!cuenta.incluir_en_total ? (
+                            <span className="lista__detalle">Fuera del patrimonio</span>
+                          ) : null}
+                        </span>
+                        <span className="lista__monto numero">
+                          {formatearGs(cuenta.saldo_actual)}
+                        </span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="seccion" aria-label="Últimos movimientos">
+            <div className="seccion__cabecera">
+              <h2 className="seccion__titulo">Últimos movimientos</h2>
+              <Link className="seccion__enlace" to="/movimientos">
+                Ver todos <ChevronRight size={14} aria-hidden="true" />
+              </Link>
+            </div>
+
+            {ultimos.cargando ? (
+              <EsqueletoLista filas={4} />
+            ) : ultimos.error ? (
+              <Mensaje tipo="error">{ultimos.error}</Mensaje>
+            ) : operaciones.length === 0 ? (
+              <EstadoVacio
+                titulo="Todavía no tienes movimientos."
+                texto="Registra tu primer gasto o ingreso con el botón +."
+                accion={
+                  <Link to="/nuevo/gasto">
+                    <Boton variante="primario">Registrar movimiento</Boton>
+                  </Link>
+                }
+              />
+            ) : (
+              <ul className="lista">
+                {operaciones.map((operacion) => (
+                  <li key={operacion.clave}>
+                    <FilaOperacion operacion={operacion} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <section className="seccion" aria-label="Gastos por categoría">
+          <div className="seccion__cabecera">
+            <h2 className="seccion__titulo">Gastos por categoría</h2>
+          </div>
+
+          {resumen.cargando ? (
+            <EsqueletoLista filas={3} />
+          ) : (resumen.datos?.gastos ?? 0) === 0 ? (
+            <EstadoVacio
+              titulo="Sin gastos este mes."
+              texto="Cuando registres gastos verás aquí cómo se reparten por categoría."
+            />
+          ) : (
+            <Suspense fallback={<EsqueletoLista filas={3} />}>
+              <GraficoGastos
+                gastoPorCategoria={resumen.datos?.gastoPorCategoria ?? new Map()}
+                categorias={categorias}
+                total={resumen.datos?.gastos ?? 0}
+              />
+            </Suspense>
+          )}
+        </section>
+      </div>
+    </>
+  )
+}

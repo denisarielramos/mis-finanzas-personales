@@ -1,0 +1,233 @@
+/* ============================================================
+   Estructura: shell de la aplicación, cabecera y navegación
+   ============================================================ */
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__contenido {
+  flex: 1;
+  width: 100%;
+  /* Deja sitio a la barra inferior y al indicador Home de iOS */
+  padding-bottom: calc(var(--alto-barra) + var(--seguro-abajo) + var(--espacio-6));
+}
+
+.contenedor {
+  width: 100%;
+  max-width: var(--ancho-contenido);
+  margin: 0 auto;
+  padding-left: max(var(--espacio-4), var(--seguro-izq));
+  padding-right: max(var(--espacio-4), var(--seguro-der));
+}
+
+.contenedor--ancho {
+  max-width: var(--ancho-ancho);
+}
+
+/* ------------------------- Cabecera de pantalla ------------------------- */
+
+.encabezado {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding-top: calc(var(--seguro-arriba) + var(--espacio-3));
+  padding-bottom: var(--espacio-3);
+  background: color-mix(in srgb, var(--fondo) 85%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--transicion);
+}
+
+.encabezado--con-borde {
+  border-bottom-color: var(--borde);
+}
+
+.encabezado__fila {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  min-height: var(--toque-minimo);
+}
+
+.encabezado__titulo {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.encabezado__subtitulo {
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+  margin-top: 2px;
+}
+
+.encabezado__acciones {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+
+/* Botón circular de cabecera (volver, añadir, etc.) */
+.boton-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--toque-minimo);
+  height: var(--toque-minimo);
+  border: none;
+  border-radius: var(--radio-full);
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: var(--sombra-suave);
+  cursor: pointer;
+  transition: transform var(--transicion), background var(--transicion);
+}
+
+.boton-icono:active {
+  transform: scale(0.94);
+}
+
+.boton-icono--plano {
+  background: transparent;
+  box-shadow: none;
+}
+
+.boton-icono--plano:hover {
+  background: var(--superficie-3);
+}
+
+/* ----------------------------- Secciones ------------------------------- */
+
+.seccion {
+  margin-top: var(--espacio-6);
+}
+
+.seccion__cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-3);
+}
+
+.seccion__titulo {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-tenue);
+}
+
+.seccion__enlace {
+  font-size: 0.875rem;
+  font-weight: 550;
+  color: var(--info);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--espacio-1) 0;
+}
+
+/* --------------------------- Barra inferior ---------------------------- */
+
+.barra-inferior {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  height: calc(var(--alto-barra) + var(--seguro-abajo));
+  padding: 0 max(var(--espacio-2), var(--seguro-izq)) var(--seguro-abajo)
+    max(var(--espacio-2), var(--seguro-der));
+  background: color-mix(in srgb, var(--superficie) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  border-top: 1px solid var(--borde);
+}
+
+.barra-inferior__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: var(--alto-barra);
+  border: none;
+  background: none;
+  color: var(--texto-tenue);
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: color var(--transicion);
+}
+
+.barra-inferior__item[aria-current='page'],
+.barra-inferior__item--activo {
+  color: var(--texto);
+}
+
+.barra-inferior__centro {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--alto-barra);
+}
+
+.barra-inferior__mas {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: var(--radio-full);
+  background: var(--superficie-oscura);
+  color: #ffffff;
+  box-shadow: var(--sombra-flotante);
+  cursor: pointer;
+  transition: transform var(--transicion);
+}
+
+.barra-inferior__mas:active {
+  transform: scale(0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  .barra-inferior__mas {
+    background: #10b981;
+    color: #04180f;
+  }
+}
+
+/* En pantallas grandes la barra flota centrada en lugar de estirarse */
+@media (min-width: 900px) {
+  .barra-inferior {
+    left: 50%;
+    right: auto;
+    bottom: var(--espacio-5);
+    transform: translateX(-50%);
+    width: min(520px, calc(100vw - 48px));
+    height: var(--alto-barra);
+    padding: 0 var(--espacio-2);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-lg);
+    box-shadow: var(--sombra-flotante);
+  }
+
+  .app__contenido {
+    padding-bottom: calc(var(--alto-barra) + var(--espacio-10));
+  }
+}

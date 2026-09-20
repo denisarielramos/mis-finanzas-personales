@@ -1,0 +1,24 @@
+node_modules
+dist
+dist-ssr
+.vite
+*.tsbuildinfo
+
+# Variables de entorno reales: nunca se suben al repositorio
+.env
+.env.local
+.env.*.local
+
+# Archivos generados por el plugin PWA
+dev-dist
+public/sw.js
+public/workbox-*.js
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+.idea
+.vscode/*
+!.vscode/extensions.json
