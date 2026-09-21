@@ -10,165 +10,170 @@ import { EsqueletoLista, EstadoVacio, Mensaje } from '../components/ui/Estados'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { useCarga } from '../hooks/useCarga'
 import { useAvisos } from '../hooks/useToast'
+import { useConexion } from '../hooks/useConexion'
 import {
-  ETIQUETA_FRECUENCIA,
-  FRECUENCIAS_SUGERIDAS,
   actualizarRecurrente,
   crearRecurrente,
   listarRecurrentes,
-  obtenerEsquemaRecurrentes,
-  valoresUsados,
-  type EsquemaRecurrentes,
 } from '../services/recurringService'
-import type { Recurrente } from '../types/db'
+import { categoriaAdmite } from '../services/categoriesService'
+import {
+  ETIQUETA_FRECUENCIA,
+  ETIQUETA_TIPO_RECURRENTE,
+  FRECUENCIAS_RECURRENTE,
+  TIPOS_RECURRENTE,
+  type FrecuenciaRecurrente,
+  type Recurrente,
+  type TipoRecurrente,
+  type UUID,
+} from '../types/db'
 import { formatearFecha, hoyISO } from '../utils/date'
 import { formatearGs, parsearEntradaMonto } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
 
-type Valores = Record<string, string | boolean>
-
-function texto(fila: Recurrente, columna: string): string {
-  const valor = fila[columna]
-  if (valor === null || valor === undefined) return ''
-  return String(valor)
+interface EstadoFormulario {
+  id: UUID | null
+  nombre: string
+  tipo: TipoRecurrente
+  monto: string
+  cuentaId: UUID | ''
+  categoriaId: UUID | ''
+  frecuencia: FrecuenciaRecurrente
+  proximaFecha: string
+  descripcion: string
+  generarAutomaticamente: boolean
+  activa: boolean
 }
 
-function valorInicial(fila: Recurrente | null, columna: string, respaldo = ''): string {
-  if (!fila) return respaldo
-  const valor = fila[columna]
-  if (valor === null || valor === undefined) return respaldo
-  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}/.test(valor)) return valor.slice(0, 10)
-  return String(valor)
+function formularioVacio(cuentaPorDefecto: UUID | ''): EstadoFormulario {
+  return {
+    id: null,
+    nombre: '',
+    tipo: 'gasto',
+    monto: '',
+    cuentaId: cuentaPorDefecto,
+    categoriaId: '',
+    frecuencia: 'mensual',
+    proximaFecha: hoyISO(),
+    descripcion: '',
+    generarAutomaticamente: false,
+    activa: true,
+  }
 }
 
 /**
- * Recurrentes.
+ * Recurrentes: movimientos que se repiten.
  *
- * La estructura de `public.recurrentes` se detecta en tiempo de ejecución, así
- * que el formulario solo muestra los campos que existen de verdad en la tabla.
- * La aplicación NO genera movimientos automáticamente desde el navegador.
+ * Esta pantalla solo guarda la configuración en `public.recurrentes`.
+ * La generación de los movimientos depende de un proceso del backend:
+ * la aplicación nunca los crea desde el navegador.
  */
 export function RecurrentesPage() {
   const { cuentas, categorias } = useCatalogo()
   const avisos = useAvisos()
+  const enLinea = useConexion()
 
   const [version, setVersion] = useState(0)
-  const [formulario, setFormulario] = useState<Valores | null>(null)
-  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [formulario, setFormulario] = useState<EstadoFormulario | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [errores, setErrores] = useState<Record<string, string>>({})
 
   const { datos, cargando, error } = useCarga(
-    async () => {
-      const esquema = await obtenerEsquemaRecurrentes()
-      const filas = await listarRecurrentes()
-      return { esquema, filas }
-    },
+    () => listarRecurrentes(),
     [version],
     'No se pudieron cargar los recurrentes.',
   )
 
-  const esquema: EsquemaRecurrentes | null = datos?.esquema ?? null
-  const filas = useMemo(() => datos?.filas ?? [], [datos])
-  const tiene = (columna: string) => esquema?.columnas.has(columna) ?? false
-  const columnaEstado = esquema?.columnaEstado ?? null
+  const recurrentes = useMemo(() => datos ?? [], [datos])
+  const cuentasActivas = useMemo(() => cuentas.filter((c) => c.activa), [cuentas])
 
-  const frecuencias = useMemo(() => {
-    const usadas = valoresUsados(filas, 'frecuencia')
-    return [...new Set([...usadas, ...FRECUENCIAS_SUGERIDAS])]
-  }, [filas])
+  const categoriasDisponibles = useMemo(
+    () => categorias.filter((c) => c.activa && categoriaAdmite(c, formulario?.tipo ?? 'gasto')),
+    [categorias, formulario?.tipo],
+  )
 
-  const tipos = useMemo(() => {
-    const usados = valoresUsados(filas, 'tipo')
-    return [...new Set([...usados, 'gasto', 'ingreso'])]
-  }, [filas])
-
-  function abrir(fila: Recurrente | null) {
+  function abrirNuevo() {
+    if (cuentasActivas.length === 0) {
+      avisos.error('Necesitas al menos una cuenta activa para crear un recurrente.')
+      return
+    }
     setErrores({})
-    setEditandoId(fila ? String(fila.id) : null)
+    setFormulario(formularioVacio(cuentasActivas[0].id))
+  }
+
+  function abrirEdicion(recurrente: Recurrente) {
+    setErrores({})
     setFormulario({
-      nombre: valorInicial(fila, 'nombre'),
-      descripcion: valorInicial(fila, 'descripcion'),
-      tipo: valorInicial(fila, 'tipo', 'gasto'),
-      monto: valorInicial(fila, 'monto', ''),
-      cuenta_id: valorInicial(fila, 'cuenta_id'),
-      categoria_id: valorInicial(fila, 'categoria_id'),
-      frecuencia: valorInicial(fila, 'frecuencia', 'mensual'),
-      intervalo: valorInicial(fila, 'intervalo', '1'),
-      dia_mes: valorInicial(fila, 'dia_mes'),
-      dia_semana: valorInicial(fila, 'dia_semana'),
-      proxima_fecha: valorInicial(fila, 'proxima_fecha', hoyISO()),
-      fecha_inicio: valorInicial(fila, 'fecha_inicio', hoyISO()),
-      fecha_fin: valorInicial(fila, 'fecha_fin'),
-      notas: valorInicial(fila, 'notas'),
-      generar_automaticamente: fila ? Boolean(fila.generar_automaticamente) : false,
-      estado: fila && columnaEstado ? Boolean(fila[columnaEstado]) : true,
+      id: recurrente.id,
+      nombre: recurrente.nombre,
+      tipo: recurrente.tipo,
+      monto: String(recurrente.monto),
+      cuentaId: recurrente.cuenta_id,
+      categoriaId: recurrente.categoria_id ?? '',
+      frecuencia: recurrente.frecuencia,
+      proximaFecha: recurrente.proxima_fecha.slice(0, 10),
+      descripcion: recurrente.descripcion ?? '',
+      generarAutomaticamente: recurrente.generar_automaticamente,
+      activa: recurrente.activa,
+    })
+  }
+
+  /** Al cambiar el tipo se descarta la categoría si ya no lo admite. */
+  function cambiarTipo(tipo: TipoRecurrente) {
+    if (!formulario) return
+    const categoria = categorias.find((c) => c.id === formulario.categoriaId)
+    const sigueValida = categoria ? categoriaAdmite(categoria, tipo) : true
+    setFormulario({
+      ...formulario,
+      tipo,
+      categoriaId: sigueValida ? formulario.categoriaId : '',
     })
   }
 
   async function guardar(e: FormEvent) {
     e.preventDefault()
-    if (!formulario || guardando || !esquema) return
+    if (!formulario || guardando) return
+
+    if (!enLinea) {
+      avisos.error('Sin conexión: no se puede guardar ahora.')
+      return
+    }
 
     const nuevos: Record<string, string> = {}
-    if (tiene('nombre') && !String(formulario.nombre).trim()) {
-      nuevos.nombre = 'Escribe un nombre.'
-    }
-    if (tiene('monto') && parsearEntradaMonto(String(formulario.monto)) <= 0) {
+    if (!formulario.nombre.trim()) nuevos.nombre = 'Escribe un nombre para el recurrente.'
+    if (parsearEntradaMonto(formulario.monto) <= 0) {
       nuevos.monto = 'Escribe un monto mayor que cero.'
     }
+    if (!formulario.cuentaId) nuevos.cuenta = 'Elige una cuenta.'
+    if (!formulario.proximaFecha) nuevos.proximaFecha = 'Elige la próxima fecha.'
+
     setErrores(nuevos)
     if (Object.keys(nuevos).length > 0) return
 
     setGuardando(true)
     try {
-      const payload: Record<string, unknown> = {}
-
-      const textoSiExiste = (columna: string) => {
-        if (!tiene(columna)) return
-        const valor = String(formulario[columna] ?? '').trim()
-        payload[columna] = valor || null
+      const datosRecurrente = {
+        nombre: formulario.nombre,
+        cuenta_id: formulario.cuentaId as UUID,
+        categoria_id: formulario.categoriaId || null,
+        tipo: formulario.tipo,
+        monto: parsearEntradaMonto(formulario.monto),
+        frecuencia: formulario.frecuencia,
+        proxima_fecha: formulario.proximaFecha,
+        generar_automaticamente: formulario.generarAutomaticamente,
+        activa: formulario.activa,
+        descripcion: formulario.descripcion || null,
       }
 
-      textoSiExiste('nombre')
-      textoSiExiste('descripcion')
-      textoSiExiste('tipo')
-      textoSiExiste('frecuencia')
-      textoSiExiste('cuenta_id')
-      textoSiExiste('categoria_id')
-      textoSiExiste('proxima_fecha')
-      textoSiExiste('fecha_inicio')
-      textoSiExiste('fecha_fin')
-      textoSiExiste('notas')
-
-      if (tiene('monto')) payload.monto = parsearEntradaMonto(String(formulario.monto))
-      if (tiene('intervalo')) {
-        const n = Number.parseInt(String(formulario.intervalo), 10)
-        payload.intervalo = Number.isFinite(n) && n > 0 ? n : 1
-      }
-      if (tiene('dia_mes')) {
-        const n = Number.parseInt(String(formulario.dia_mes), 10)
-        payload.dia_mes = Number.isFinite(n) ? n : null
-      }
-      if (tiene('dia_semana')) {
-        const n = Number.parseInt(String(formulario.dia_semana), 10)
-        payload.dia_semana = Number.isFinite(n) ? n : null
-      }
-      if (tiene('generar_automaticamente')) {
-        payload.generar_automaticamente = Boolean(formulario.generar_automaticamente)
-      }
-      if (columnaEstado) payload[columnaEstado] = Boolean(formulario.estado)
-
-      if (editandoId) {
-        await actualizarRecurrente(editandoId, payload)
+      if (formulario.id) {
+        await actualizarRecurrente(formulario.id, datosRecurrente)
         avisos.exito('Recurrente actualizado correctamente.')
       } else {
-        await crearRecurrente(payload)
+        await crearRecurrente(datosRecurrente)
         avisos.exito('Recurrente creado correctamente.')
       }
 
       setFormulario(null)
-      setEditandoId(null)
       setVersion((v) => v + 1)
     } catch (e) {
       avisos.error(textoDeExcepcion(e, 'No se pudo guardar el recurrente.'))
@@ -183,16 +188,14 @@ export function RecurrentesPage() {
         titulo="Recurrentes"
         volver="/mas"
         acciones={
-          esquema ? (
-            <button
-              type="button"
-              className="boton-icono"
-              aria-label="Nuevo recurrente"
-              onClick={() => abrir(null)}
-            >
-              <Plus size={20} aria-hidden="true" />
-            </button>
-          ) : undefined
+          <button
+            type="button"
+            className="boton-icono"
+            aria-label="Nuevo recurrente"
+            onClick={abrirNuevo}
+          >
+            <Plus size={20} aria-hidden="true" />
+          </button>
         }
       />
 
@@ -201,59 +204,57 @@ export function RecurrentesPage() {
 
         {cargando ? (
           <EsqueletoLista filas={3} />
-        ) : filas.length === 0 ? (
+        ) : recurrentes.length === 0 ? (
           <EstadoVacio
             titulo="Todavía no tienes movimientos recurrentes."
             texto="Aquí se configuran los movimientos que se repiten, como el alquiler o un servicio mensual."
             icono={<Repeat size={22} aria-hidden="true" />}
             accion={
-              esquema ? (
-                <Boton variante="primario" onClick={() => abrir(null)}>
-                  Crear recurrente
-                </Boton>
-              ) : undefined
+              <Boton variante="primario" onClick={abrirNuevo}>
+                Crear recurrente
+              </Boton>
             }
           />
         ) : (
           <ul className="lista">
-            {filas.map((fila) => {
-              const activo = columnaEstado ? Boolean(fila[columnaEstado]) : true
-              const nombre =
-                texto(fila, 'nombre') || texto(fila, 'descripcion') || 'Recurrente sin nombre'
-              const frecuencia = texto(fila, 'frecuencia')
-              const proxima = texto(fila, 'proxima_fecha')
-
-              return (
-                <li key={String(fila.id)}>
-                  <button
-                    type="button"
-                    className="lista__item"
-                    style={{ opacity: activo ? 1 : 0.6 }}
-                    onClick={() => abrir(fila)}
+            {recurrentes.map((recurrente) => (
+              <li key={recurrente.id}>
+                <button
+                  type="button"
+                  className="lista__item"
+                  style={{ opacity: recurrente.activa ? 1 : 0.6 }}
+                  onClick={() => abrirEdicion(recurrente)}
+                >
+                  <span
+                    className={`icono-circular ${recurrente.tipo === 'ingreso' ? 'icono-circular--positivo' : 'icono-circular--negativo'}`}
+                    aria-hidden="true"
                   >
-                    <span className="icono-circular" aria-hidden="true">
-                      <Repeat size={18} />
+                    <Repeat size={18} />
+                  </span>
+                  <span className="lista__cuerpo">
+                    <span className="lista__titulo">{recurrente.nombre}</span>
+                    <span className="lista__detalle">
+                      {[
+                        ETIQUETA_FRECUENCIA[recurrente.frecuencia] ?? recurrente.frecuencia,
+                        // En un recurrente desactivado la próxima fecha no aplica.
+                        recurrente.activa
+                          ? formatearFecha(recurrente.proxima_fecha)
+                          : 'Desactivado',
+                      ].join(' · ')}
                     </span>
-                    <span className="lista__cuerpo">
-                      <span className="lista__titulo">{nombre}</span>
-                      <span className="lista__detalle">
-                        {[
-                          frecuencia ? (ETIQUETA_FRECUENCIA[frecuencia] ?? frecuencia) : null,
-                          proxima ? formatearFecha(proxima) : null,
-                          activo ? null : 'Desactivado',
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    </span>
-                    {fila.monto !== undefined ? (
-                      <span className="lista__monto numero">{formatearGs(fila.monto)}</span>
-                    ) : null}
-                    <ChevronRight size={18} className="lista__flecha" aria-hidden="true" />
-                  </button>
-                </li>
-              )
-            })}
+                  </span>
+                  <span
+                    className={`lista__monto numero ${recurrente.tipo === 'ingreso' ? 'texto-positivo' : 'texto-negativo'}`}
+                  >
+                    {formatearGs(
+                      recurrente.tipo === 'ingreso' ? recurrente.monto : -recurrente.monto,
+                      { signo: recurrente.tipo === 'ingreso' ? 'siempre' : 'auto' },
+                    )}
+                  </span>
+                  <ChevronRight size={18} className="lista__flecha" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
           </ul>
         )}
 
@@ -268,269 +269,160 @@ export function RecurrentesPage() {
 
       <Hoja
         abierta={formulario !== null}
-        titulo={editandoId ? 'Editar recurrente' : 'Nuevo recurrente'}
+        titulo={formulario?.id ? 'Editar recurrente' : 'Nuevo recurrente'}
         onCerrar={() => (guardando ? undefined : setFormulario(null))}
       >
-        {formulario && esquema ? (
+        {formulario ? (
           <form className="formulario" onSubmit={guardar} noValidate>
-            {tiene('nombre') ? (
-              <Campo etiqueta="Nombre" error={errores.nombre}>
-                {(props) => (
-                  <input
-                    {...props}
-                    className="control"
-                    type="text"
-                    placeholder="Alquiler"
-                    value={String(formulario.nombre ?? '')}
-                    maxLength={80}
-                    onChange={(e) => setFormulario({ ...formulario, nombre: e.target.value })}
-                  />
-                )}
-              </Campo>
-            ) : null}
+            <Campo etiqueta="Nombre" error={errores.nombre}>
+              {(props) => (
+                <input
+                  {...props}
+                  className="control"
+                  type="text"
+                  placeholder="Alquiler"
+                  value={formulario.nombre}
+                  maxLength={80}
+                  onChange={(e) => setFormulario({ ...formulario, nombre: e.target.value })}
+                />
+              )}
+            </Campo>
 
-            {tiene('tipo') ? (
-              <Campo etiqueta="Tipo">
-                {(props) => (
-                  <select
-                    {...props}
-                    className="control"
-                    value={String(formulario.tipo ?? '')}
-                    onChange={(e) => setFormulario({ ...formulario, tipo: e.target.value })}
-                  >
-                    {tipos.map((valor) => (
-                      <option key={valor} value={valor}>
-                        {valor === 'gasto' ? 'Gasto' : valor === 'ingreso' ? 'Ingreso' : valor}
+            <Campo etiqueta="Tipo">
+              {(props) => (
+                <select
+                  {...props}
+                  className="control"
+                  value={formulario.tipo}
+                  onChange={(e) => cambiarTipo(e.target.value as TipoRecurrente)}
+                >
+                  {TIPOS_RECURRENTE.map((valor) => (
+                    <option key={valor} value={valor}>
+                      {ETIQUETA_TIPO_RECURRENTE[valor]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Campo>
+
+            <Campo etiqueta="Monto" error={errores.monto}>
+              {(props) => (
+                <InputMonto
+                  {...props}
+                  valor={formulario.monto}
+                  onChange={(monto) => setFormulario({ ...formulario, monto })}
+                />
+              )}
+            </Campo>
+
+            <Campo etiqueta="Cuenta" error={errores.cuenta}>
+              {(props) => (
+                <select
+                  {...props}
+                  className="control"
+                  value={formulario.cuentaId}
+                  onChange={(e) => setFormulario({ ...formulario, cuentaId: e.target.value })}
+                >
+                  <option value="">Elige una cuenta</option>
+                  {cuentas
+                    .filter((c) => c.activa || c.id === formulario.cuentaId)
+                    .map((cuenta) => (
+                      <option key={cuenta.id} value={cuenta.id}>
+                        {cuenta.nombre}
                       </option>
                     ))}
-                  </select>
-                )}
-              </Campo>
-            ) : null}
+                </select>
+              )}
+            </Campo>
 
-            {tiene('monto') ? (
-              <Campo etiqueta="Monto" error={errores.monto}>
-                {(props) => (
-                  <InputMonto
-                    {...props}
-                    valor={String(formulario.monto ?? '')}
-                    onChange={(monto) => setFormulario({ ...formulario, monto })}
-                  />
-                )}
-              </Campo>
-            ) : null}
+            <Campo
+              etiqueta="Categoría"
+              ayuda={
+                categoriasDisponibles.length === 0
+                  ? 'Todavía no tienes categorías para este tipo.'
+                  : undefined
+              }
+            >
+              {(props) => (
+                <select
+                  {...props}
+                  className="control"
+                  value={formulario.categoriaId}
+                  onChange={(e) => setFormulario({ ...formulario, categoriaId: e.target.value })}
+                >
+                  <option value="">Sin categoría</option>
+                  {categoriasDisponibles.map((categoria) => (
+                    <option key={categoria.id} value={categoria.id}>
+                      {categoria.categoria_padre_id ? '— ' : ''}
+                      {categoria.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Campo>
 
-            {tiene('cuenta_id') ? (
-              <Campo etiqueta="Cuenta">
-                {(props) => (
-                  <select
-                    {...props}
-                    className="control"
-                    value={String(formulario.cuenta_id ?? '')}
-                    onChange={(e) => setFormulario({ ...formulario, cuenta_id: e.target.value })}
-                  >
-                    <option value="">Sin cuenta</option>
-                    {cuentas
-                      .filter((c) => c.activa || c.id === formulario.cuenta_id)
-                      .map((cuenta) => (
-                        <option key={cuenta.id} value={cuenta.id}>
-                          {cuenta.nombre}
-                        </option>
-                      ))}
-                  </select>
-                )}
-              </Campo>
-            ) : null}
+            <Campo etiqueta="Frecuencia">
+              {(props) => (
+                <select
+                  {...props}
+                  className="control"
+                  value={formulario.frecuencia}
+                  onChange={(e) =>
+                    setFormulario({
+                      ...formulario,
+                      frecuencia: e.target.value as FrecuenciaRecurrente,
+                    })
+                  }
+                >
+                  {FRECUENCIAS_RECURRENTE.map((valor) => (
+                    <option key={valor} value={valor}>
+                      {ETIQUETA_FRECUENCIA[valor]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Campo>
 
-            {tiene('categoria_id') ? (
-              <Campo etiqueta="Categoría">
-                {(props) => (
-                  <select
-                    {...props}
-                    className="control"
-                    value={String(formulario.categoria_id ?? '')}
-                    onChange={(e) => setFormulario({ ...formulario, categoria_id: e.target.value })}
-                  >
-                    <option value="">Sin categoría</option>
-                    {categorias
-                      .filter((c) => c.activa || c.id === formulario.categoria_id)
-                      .map((categoria) => (
-                        <option key={categoria.id} value={categoria.id}>
-                          {categoria.nombre}
-                        </option>
-                      ))}
-                  </select>
-                )}
-              </Campo>
-            ) : null}
+            <Campo etiqueta="Próxima fecha" error={errores.proximaFecha}>
+              {(props) => (
+                <input
+                  {...props}
+                  className="control"
+                  type="date"
+                  value={formulario.proximaFecha}
+                  onChange={(e) => setFormulario({ ...formulario, proximaFecha: e.target.value })}
+                />
+              )}
+            </Campo>
 
-            {tiene('frecuencia') ? (
-              <Campo etiqueta="Frecuencia">
-                {(props) => (
-                  <select
-                    {...props}
-                    className="control"
-                    value={String(formulario.frecuencia ?? '')}
-                    onChange={(e) => setFormulario({ ...formulario, frecuencia: e.target.value })}
-                  >
-                    {frecuencias.map((valor) => (
-                      <option key={valor} value={valor}>
-                        {ETIQUETA_FRECUENCIA[valor] ?? valor}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </Campo>
-            ) : null}
+            <Campo etiqueta="Descripción">
+              {(props) => (
+                <input
+                  {...props}
+                  className="control"
+                  type="text"
+                  placeholder="Opcional"
+                  value={formulario.descripcion}
+                  maxLength={200}
+                  onChange={(e) => setFormulario({ ...formulario, descripcion: e.target.value })}
+                />
+              )}
+            </Campo>
 
-            {tiene('intervalo') ? (
-              <Campo etiqueta="Intervalo" ayuda="Cada cuántos periodos se repite.">
-                {(props) => (
-                  <input
-                    {...props}
-                    className="control numero"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    value={String(formulario.intervalo ?? '')}
-                    onChange={(e) => setFormulario({ ...formulario, intervalo: e.target.value })}
-                  />
-                )}
-              </Campo>
-            ) : null}
+            <Interruptor
+              etiqueta="Generar automáticamente"
+              descripcion="Solo guarda la preferencia: los movimientos los genera el backend, no la aplicación."
+              activo={formulario.generarAutomaticamente}
+              onCambio={(generarAutomaticamente) =>
+                setFormulario({ ...formulario, generarAutomaticamente })
+              }
+            />
 
-            {tiene('dia_mes') ? (
-              <Campo etiqueta="Día del mes">
-                {(props) => (
-                  <input
-                    {...props}
-                    className="control numero"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={31}
-                    value={String(formulario.dia_mes ?? '')}
-                    onChange={(e) => setFormulario({ ...formulario, dia_mes: e.target.value })}
-                  />
-                )}
-              </Campo>
-            ) : null}
-
-            {tiene('dia_semana') ? (
-              <Campo etiqueta="Día de la semana" ayuda="Según cómo lo guarde la base de datos.">
-                {(props) => (
-                  <input
-                    {...props}
-                    className="control numero"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={7}
-                    value={String(formulario.dia_semana ?? '')}
-                    onChange={(e) => setFormulario({ ...formulario, dia_semana: e.target.value })}
-                  />
-                )}
-              </Campo>
-            ) : null}
-
-            {tiene('proxima_fecha') ? (
-              <Campo etiqueta="Próxima fecha">
-                {(props) => (
-                  <input
-                    {...props}
-                    className="control"
-                    type="date"
-                    value={String(formulario.proxima_fecha ?? '')}
-                    onChange={(e) =>
-                      setFormulario({ ...formulario, proxima_fecha: e.target.value })
-                    }
-                  />
-                )}
-              </Campo>
-            ) : null}
-
-            {tiene('fecha_inicio') || tiene('fecha_fin') ? (
-              <div className="fila-doble">
-                {tiene('fecha_inicio') ? (
-                  <Campo etiqueta="Inicio">
-                    {(props) => (
-                      <input
-                        {...props}
-                        className="control"
-                        type="date"
-                        value={String(formulario.fecha_inicio ?? '')}
-                        onChange={(e) =>
-                          setFormulario({ ...formulario, fecha_inicio: e.target.value })
-                        }
-                      />
-                    )}
-                  </Campo>
-                ) : null}
-                {tiene('fecha_fin') ? (
-                  <Campo etiqueta="Fin" ayuda="Opcional">
-                    {(props) => (
-                      <input
-                        {...props}
-                        className="control"
-                        type="date"
-                        value={String(formulario.fecha_fin ?? '')}
-                        onChange={(e) => setFormulario({ ...formulario, fecha_fin: e.target.value })}
-                      />
-                    )}
-                  </Campo>
-                ) : null}
-              </div>
-            ) : null}
-
-            {tiene('descripcion') ? (
-              <Campo etiqueta="Descripción">
-                {(props) => (
-                  <input
-                    {...props}
-                    className="control"
-                    type="text"
-                    placeholder="Opcional"
-                    value={String(formulario.descripcion ?? '')}
-                    maxLength={200}
-                    onChange={(e) => setFormulario({ ...formulario, descripcion: e.target.value })}
-                  />
-                )}
-              </Campo>
-            ) : null}
-
-            {tiene('notas') ? (
-              <Campo etiqueta="Notas">
-                {(props) => (
-                  <textarea
-                    {...props}
-                    className="control"
-                    placeholder="Opcional"
-                    value={String(formulario.notas ?? '')}
-                    maxLength={500}
-                    onChange={(e) => setFormulario({ ...formulario, notas: e.target.value })}
-                  />
-                )}
-              </Campo>
-            ) : null}
-
-            {tiene('generar_automaticamente') ? (
-              <Interruptor
-                etiqueta="Generar automáticamente"
-                descripcion="Solo guarda la preferencia: la genera el backend, no la aplicación."
-                activo={Boolean(formulario.generar_automaticamente)}
-                onCambio={(valor) =>
-                  setFormulario({ ...formulario, generar_automaticamente: valor })
-                }
-              />
-            ) : null}
-
-            {columnaEstado ? (
-              <Interruptor
-                etiqueta="Recurrente activo"
-                activo={Boolean(formulario.estado)}
-                onCambio={(valor) => setFormulario({ ...formulario, estado: valor })}
-              />
-            ) : null}
+            <Interruptor
+              etiqueta="Recurrente activo"
+              activo={formulario.activa}
+              onCambio={(activa) => setFormulario({ ...formulario, activa })}
+            />
 
             <div style={{ display: 'flex', gap: 8 }}>
               <Boton

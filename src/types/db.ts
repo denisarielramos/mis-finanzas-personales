@@ -181,16 +181,49 @@ export interface Presupuesto {
   updated_at: string | null
 }
 
-/**
- * Fila de `public.recurrentes`.
- *
- * La estructura real de esta tabla se detecta en tiempo de ejecución
- * (ver `services/recurringService.ts`), por eso el tipo es deliberadamente
- * abierto: solo `id` está garantizado.
- */
+/** Tipo de movimiento que genera un recurrente. */
+export type TipoRecurrente = 'ingreso' | 'gasto'
+
+export const TIPOS_RECURRENTE: TipoRecurrente[] = ['gasto', 'ingreso']
+
+export const ETIQUETA_TIPO_RECURRENTE: Record<TipoRecurrente, string> = {
+  gasto: 'Gasto',
+  ingreso: 'Ingreso',
+}
+
+/** Frecuencias admitidas por el CHECK de `public.recurrentes.frecuencia`. */
+export type FrecuenciaRecurrente = 'semanal' | 'quincenal' | 'mensual' | 'anual'
+
+export const FRECUENCIAS_RECURRENTE: FrecuenciaRecurrente[] = [
+  'semanal',
+  'quincenal',
+  'mensual',
+  'anual',
+]
+
+export const ETIQUETA_FRECUENCIA: Record<FrecuenciaRecurrente, string> = {
+  semanal: 'Semanal',
+  quincenal: 'Quincenal',
+  mensual: 'Mensual',
+  anual: 'Anual',
+}
+
+/** Fila de `public.recurrentes`. */
 export interface Recurrente {
   id: UUID
-  [columna: string]: unknown
+  user_id: UUID
+  nombre: string
+  cuenta_id: UUID
+  categoria_id: UUID | null
+  tipo: TipoRecurrente
+  monto: MontoPYG
+  frecuencia: FrecuenciaRecurrente
+  proxima_fecha: FechaISO
+  generar_automaticamente: boolean
+  activa: boolean
+  descripcion: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 /** Resultado del RPC `buscar_transferencias_potenciales`. */

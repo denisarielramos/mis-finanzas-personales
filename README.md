@@ -154,9 +154,10 @@ Con `npm run icons` se regeneran los provisionales.
 - **«Ignorar» en Conciliación no se guarda.** Solo oculta la sugerencia durante la
   visita: no existe una tabla donde registrar los descartes y la aplicación no modifica
   el esquema de la base.
-- **Recurrentes.** La estructura real de `public.recurrentes` se detecta al vuelo y el
-  formulario solo muestra las columnas que existen. La aplicación guarda la
-  configuración (incluido `generar_automaticamente` si existe), pero **no genera
-  movimientos**: eso depende de un proceso del backend.
+- **Recurrentes.** La aplicación guarda la configuración en `public.recurrentes`
+  (nombre, cuenta, categoría, tipo, monto, frecuencia, próxima fecha, descripción,
+  `generar_automaticamente` y `activa`), pero **no genera movimientos**: eso depende de
+  un proceso del backend. Las frecuencias admitidas son las del CHECK de la tabla:
+  semanal, quincenal, mensual y anual.
 - El gráfico muestra las 4 categorías con más gasto y agrupa el resto en «Otras», para
   que siga siendo legible en un iPhone.
