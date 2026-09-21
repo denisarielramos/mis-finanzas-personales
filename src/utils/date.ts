@@ -65,12 +65,39 @@ export function formatearFechaCorta(iso: FechaISO | null | undefined): string {
   return `${dia} ${MESES_CORTOS[mes - 1]}`
 }
 
+/**
+ * Hora local `HH:mm` de una columna `timestamptz`.
+ * Se usa la zona horaria del navegador; devuelve `null` si no hay dato válido.
+ */
+export function formatearHora(valor: string | null | undefined): string | null {
+  if (!valor) return null
+  const fecha = new Date(valor)
+  if (Number.isNaN(fecha.getTime())) return null
+  return `${dosDigitos(fecha.getHours())}:${dosDigitos(fecha.getMinutes())}`
+}
+
 /** Fecha y hora de una columna `timestamptz` → `20/09/2026 14:35`. */
 export function formatearFechaHora(valor: string | null | undefined): string {
   if (!valor) return '—'
   const fecha = new Date(valor)
   if (Number.isNaN(fecha.getTime())) return '—'
-  return `${dosDigitos(fecha.getDate())}/${dosDigitos(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${dosDigitos(fecha.getHours())}:${dosDigitos(fecha.getMinutes())}`
+  return `${dosDigitos(fecha.getDate())}/${dosDigitos(fecha.getMonth() + 1)}/${fecha.getFullYear()} ${formatearHora(valor)}`
+}
+
+/**
+ * Marca de tiempo de una operación: la fecha de calendario (`fecha`) más la
+ * hora local de registro (`created_at`), cuando existe.
+ *
+ *   formatearFechaConHora('2026-09-21', '2026-09-21T03:18:00Z') → '21/09/2026 · 00:18'
+ *   formatearFechaConHora('2026-09-21', null)                   → '21/09/2026'
+ */
+export function formatearFechaConHora(
+  fecha: FechaISO | null | undefined,
+  creadoEn: string | null | undefined,
+): string {
+  const dia = formatearFecha(fecha)
+  const hora = formatearHora(creadoEn)
+  return hora ? `${dia} · ${hora}` : dia
 }
 
 /** Suma (o resta) días a una fecha de calendario, sin tocar zonas horarias. */

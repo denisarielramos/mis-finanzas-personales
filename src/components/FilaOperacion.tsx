@@ -4,6 +4,7 @@ import type { Movimiento } from '../types/db'
 import { ETIQUETA_TIPO_MOVIMIENTO } from '../types/db'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { formatearGs } from '../utils/money'
+import { formatearFechaConHora } from '../utils/date'
 import { iconoPorNombre } from './ui/SelectorIcono'
 import { signoDeMovimiento, type Operacion } from '../utils/movimientos'
 
@@ -58,6 +59,10 @@ function FilaMovimiento({ movimiento }: { movimiento: Movimiento }) {
           {detalle || 'Sin categoría'}
           {movimiento.estado === 'pendiente' ? ' · Pendiente' : ''}
           {anulado ? ' · Anulado' : ''}
+        </span>
+        {/* Fecha del movimiento + hora local de registro, como dato secundario */}
+        <span className="lista__momento numero">
+          {formatearFechaConHora(movimiento.fecha, movimiento.created_at)}
         </span>
       </span>
 
@@ -119,6 +124,13 @@ function FilaTransferencia({
         <span className="lista__detalle">
           {descripcion ? `${descripcion} · ` : ''}Transferencia
           {anulado ? ' · Anulada' : ''}
+        </span>
+        {/* La hora sale de la salida; si falta, de la entrada */}
+        <span className="lista__momento numero">
+          {formatearFechaConHora(
+            operacion.fecha,
+            operacion.salida?.created_at ?? operacion.entrada?.created_at ?? null,
+          )}
         </span>
       </span>
 

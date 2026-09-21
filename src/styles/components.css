@@ -293,6 +293,17 @@
   white-space: nowrap;
 }
 
+/* Fecha y hora de la operación: dato secundario, discreto */
+.lista__momento {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--texto-tenue);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lista__monto {
   font-size: 0.9375rem;
   font-weight: 650;
