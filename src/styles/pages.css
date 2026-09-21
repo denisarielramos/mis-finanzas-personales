@@ -466,3 +466,160 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   Planificación, próximos movimientos y planes de cuotas
+   (clases nuevas; no modifican ninguna regla anterior)
+   ============================================================ */
+
+/* Línea destacada: disponible proyectado / flujo previsto */
+.linea-proyectada {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
+}
+
+.linea-proyectada__etiqueta {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+}
+
+.linea-proyectada__valor {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+}
+
+/* Bloque de fecha a la izquierda de un próximo movimiento */
+.proximo-fecha {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 4px 0;
+  border-radius: var(--radio-sm);
+  background: var(--superficie-3);
+  color: var(--texto-suave);
+  flex-shrink: 0;
+  line-height: 1.1;
+}
+
+.proximo-fecha strong {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--texto);
+}
+
+.proximo-fecha span {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.proximo-fecha--vencido {
+  background: var(--negativo-suave);
+}
+
+.proximo-fecha--vencido strong,
+.proximo-fecha--vencido span {
+  color: var(--negativo);
+}
+
+/* Fila de lista con una acción secundaria a la derecha */
+.fila-con-accion {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--borde);
+}
+
+.fila-con-accion:last-child {
+  border-bottom: none;
+}
+
+.fila-con-accion .lista__item {
+  flex: 1;
+  min-width: 0;
+  border-bottom: none;
+}
+
+.fila-con-accion__accion {
+  flex-shrink: 0;
+  padding: 0 var(--espacio-3) 0 0;
+}
+
+/* Tarjeta de plan de cuotas */
+.plan {
+  padding: var(--espacio-4);
+}
+
+.plan__cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+}
+
+.plan__nombre {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.plan__proveedor {
+  font-size: 0.75rem;
+  color: var(--texto-tenue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.plan__cifras {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  margin: var(--espacio-3) 0 var(--espacio-2);
+  font-size: 0.875rem;
+}
+
+.plan__pendiente {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.plan__pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  margin-top: var(--espacio-2);
+  font-size: 0.8125rem;
+  color: var(--texto-suave);
+}
+
+/* Previsualización del plan antes de crearlo */
+.previsualizacion {
+  padding: var(--espacio-4);
+  background: var(--superficie-2);
+  border: 1px dashed var(--borde-fuerte);
+  border-radius: var(--radio);
+}
+
+.previsualizacion__titulo {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-tenue);
+  margin-bottom: var(--espacio-3);
+}
+
+.previsualizacion__cuota {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}

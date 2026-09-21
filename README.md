@@ -18,9 +18,28 @@ sin decimales.
 - **Detalle** de cada operación, con edición y eliminación (anulación).
 - **Alta de gastos, ingresos y transferencias** con formularios cómodos en móvil.
 - **Cuentas**: crear, editar y desactivar.
-- **Categorías** (incluidas subcategorías), **presupuestos**, **recurrentes** y
-  **conciliación de transferencias**.
+- **Planificación** en el inicio: ingresos y pagos pendientes del mes, flujo previsto y
+  disponible proyectado, además de la lista de **próximos cobros y pagos** (con aviso de
+  vencidos) y su confirmación en un toque.
+- **Recurrentes**: ingresos y gastos previstos (día fijo del mes o último día, monto
+  estimado ajustable al confirmar).
+- **Cuotas y financiaciones**: compras en cuotas con saldo pendiente, progreso, pago de
+  cada cuota, reversión de un pago y cancelación del plan.
+- **Categorías** (incluidas subcategorías), **presupuestos** y **conciliación de
+  transferencias**.
 - **Configuración**: usuario actual y cierre de sesión.
+
+### Previsto contra real
+
+La aplicación distingue dos cosas que nunca se mezclan:
+
+| | Dónde vive | ¿Afecta a los saldos? |
+|---|---|---|
+| **Previsto / pendiente** | `recurrentes`, `cuotas_plan` (vía `v_proximos_movimientos`) | No |
+| **Real** | `movimientos` | Sí |
+
+Un recurrente o una cuota pendientes no tocan el patrimonio. Solo al confirmarlos se
+crea el movimiento real, y siempre a través de su RPC.
 
 ## Stack
 
@@ -97,10 +116,17 @@ ya existen en la base de datos:
 | `anular_transferencia` | `src/services/transfersService.ts` → «Eliminar transferencia» |
 | `buscar_transferencias_potenciales` | `src/services/reconcileService.ts` → pantalla Conciliación |
 | `conciliar_transferencia` | `src/services/reconcileService.ts` → botón «Confirmar» |
+| `confirmar_recurrente` | `src/services/recurringService.ts` → hoja «Confirmar» de un recurrente previsto |
+| `crear_plan_cuotas` | `src/services/installmentsService.ts` → nueva compra en cuotas |
+| `confirmar_cuota_plan` | `src/services/installmentsService.ts` → hoja «Registrar pago» de una cuota |
+| `revertir_pago_cuota` | `src/services/installmentsService.ts` → «Revertir pago» |
+| `cancelar_plan_cuotas` | `src/services/installmentsService.ts` → «Cancelar financiación» |
 
 Reglas que respeta la aplicación:
 
 - Los montos se envían **siempre en positivo**; `monto_firmado` lo calcula la base.
+- **Nunca** se crean movimientos previstos en `public.movimientos`: esa tabla solo
+  contiene dinero que realmente se movió.
 - **Nunca** se borra un movimiento físicamente: se anula.
 - **Nunca** se crea, edita ni anula una sola mitad de una transferencia.
 - Una transferencia entre cuentas propias **no es gasto ni ingreso**: no entra en los
@@ -154,10 +180,20 @@ Con `npm run icons` se regeneran los provisionales.
 - **«Ignorar» en Conciliación no se guarda.** Solo oculta la sugerencia durante la
   visita: no existe una tabla donde registrar los descartes y la aplicación no modifica
   el esquema de la base.
-- **Recurrentes.** La aplicación guarda la configuración en `public.recurrentes`
-  (nombre, cuenta, categoría, tipo, monto, frecuencia, próxima fecha, descripción,
-  `generar_automaticamente` y `activa`), pero **no genera movimientos**: eso depende de
-  un proceso del backend. Las frecuencias admitidas son las del CHECK de la tabla:
-  semanal, quincenal, mensual y anual.
+- **Recurrentes.** La aplicación guarda la configuración en `public.recurrentes` y
+  permite confirmar cada vencimiento a mano, pero **no genera movimientos por su
+  cuenta**: no hay ningún planificador en el navegador. Si activas
+  `generar_automaticamente`, quien debe generar los movimientos es un proceso del
+  backend. Las frecuencias admitidas son las del CHECK de la tabla: semanal, quincenal,
+  mensual y anual.
+- **Disponible proyectado** solo se muestra en el mes en curso. Para otros meses se
+  muestran ingresos y gastos previstos, pero no un patrimonio futuro: ignoraría lo que
+  ocurra en los meses intermedios.
+- **Previsualización de un plan de cuotas.** El reparto por cuota y la fecha de la
+  última cuota son una estimación de la interfaz; las cuotas reales las genera
+  `crear_plan_cuotas` y son las que manda.
+- **«Vencido» es visual.** Tanto en próximos movimientos como en las cuotas, el aviso
+  de vencimiento se calcula comparando con la fecha de hoy: nunca se modifica el estado
+  guardado en la base.
 - El gráfico muestra las 4 categorías con más gasto y agrupa el resto en «Otras», para
   que siga siendo legible en un iPhone.

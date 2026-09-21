@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Link2, Repeat, Settings, Tags, Target } from 'lucide-react'
+import { ChevronRight, CreditCard, Link2, Repeat, Settings, Tags, Target } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { useAuth } from '../hooks/useAuth'
 
@@ -19,8 +19,14 @@ const OPCIONES = [
   {
     ruta: '/recurrentes',
     titulo: 'Recurrentes',
-    detalle: 'Movimientos que se repiten',
+    detalle: 'Ingresos y gastos previstos que se repiten',
     Icono: Repeat,
+  },
+  {
+    ruta: '/cuotas',
+    titulo: 'Cuotas y financiaciones',
+    detalle: 'Compras en cuotas y saldo pendiente',
+    Icono: CreditCard,
   },
   {
     ruta: '/conciliacion',

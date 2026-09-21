@@ -17,7 +17,10 @@ import { idUsuarioActual } from './authService'
  * Columnas reales de la tabla:
  *   id, user_id, nombre, cuenta_id, categoria_id, tipo, monto, frecuencia,
  *   proxima_fecha, generar_automaticamente, activa, descripcion,
- *   created_at, updated_at
+ *   dia_mes, ultimo_dia_mes, monto_estimado, created_at, updated_at
+ *
+ * Un recurrente es una PREVISIÓN: no toca los saldos. El movimiento real solo
+ * lo crea el RPC `confirmar_recurrente`, que además avanza `proxima_fecha`.
  *
  * La aplicación NO genera movimientos automáticamente desde el navegador:
  * solo guarda la configuración. Si `generar_automaticamente` está activo, la
@@ -55,6 +58,12 @@ export interface DatosRecurrente {
   generar_automaticamente: boolean
   activa: boolean
   descripcion: string | null
+  /** Día fijo del mes (1..31) o `null` si no aplica. */
+  dia_mes: number | null
+  /** `true` para «último día del mes»; entonces `dia_mes` va en `null`. */
+  ultimo_dia_mes: boolean
+  /** `true` si el monto es una estimación que se ajusta al confirmar. */
+  monto_estimado: boolean
 }
 
 function aFila(datos: DatosRecurrente): Record<string, unknown> {
@@ -69,6 +78,10 @@ function aFila(datos: DatosRecurrente): Record<string, unknown> {
     generar_automaticamente: datos.generar_automaticamente,
     activa: datos.activa,
     descripcion: datos.descripcion?.trim() || null,
+    // «Último día del mes» y «día fijo» son excluyentes.
+    dia_mes: datos.ultimo_dia_mes ? null : datos.dia_mes,
+    ultimo_dia_mes: datos.ultimo_dia_mes,
+    monto_estimado: datos.monto_estimado,
   }
 }
 
@@ -108,4 +121,41 @@ export async function cambiarEstadoRecurrente(id: UUID, activa: boolean): Promis
     error,
     activa ? 'No se pudo activar el recurrente.' : 'No se pudo desactivar el recurrente.',
   )
+}
+
+export async function obtenerRecurrente(id: UUID): Promise<Recurrente | null> {
+  const { data, error } = await supabase.from('recurrentes').select('*').eq('id', id).maybeSingle()
+  lanzarSiError(error, 'No se pudo cargar el recurrente.')
+  return data ? normalizar(data as Record<string, unknown>) : null
+}
+
+export interface DatosConfirmacion {
+  recurrenteId: UUID
+  /** Monto realmente cobrado o pagado. `null` usa el previsto. */
+  montoReal: MontoPYG | null
+  fechaReal: FechaISO | null
+  cuentaId: UUID | null
+  descripcion: string | null
+  notas: string | null
+}
+
+/**
+ * RPC `confirmar_recurrente`.
+ *
+ * Es la ÚNICA forma de convertir una previsión en un movimiento real:
+ * crea el movimiento, lo vincula al recurrente, marca `origen = recurrente`
+ * y avanza `proxima_fecha`. El frontend nunca crea ese movimiento a mano.
+ */
+export async function confirmarRecurrente(datos: DatosConfirmacion): Promise<unknown> {
+  const { data, error } = await supabase.rpc('confirmar_recurrente', {
+    p_recurrente_id: datos.recurrenteId,
+    p_monto_real: datos.montoReal,
+    p_fecha_real: datos.fechaReal,
+    p_cuenta_id: datos.cuentaId,
+    p_descripcion: datos.descripcion?.trim() || null,
+    p_notas: datos.notas?.trim() || null,
+  })
+
+  lanzarSiError(error, 'No se pudo confirmar el movimiento.')
+  return data
 }

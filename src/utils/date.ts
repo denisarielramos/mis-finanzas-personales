@@ -81,6 +81,30 @@ export function sumarDias(iso: FechaISO, dias: number): FechaISO {
   return `${d.getUTCFullYear()}-${dosDigitos(d.getUTCMonth() + 1)}-${dosDigitos(d.getUTCDate())}`
 }
 
+/**
+ * Suma meses a una fecha de calendario.
+ * Si el día no existe en el mes destino se usa el último día de ese mes
+ * (31/01 + 1 mes → 28/02).
+ */
+export function sumarMeses(iso: FechaISO, meses: number): FechaISO {
+  const { anio, mes, dia } = partesFecha(iso)
+  const destino = new Date(Date.UTC(anio, mes - 1 + meses, 1))
+  const ultimoDia = new Date(
+    Date.UTC(destino.getUTCFullYear(), destino.getUTCMonth() + 1, 0),
+  ).getUTCDate()
+  const diaFinal = Math.min(dia, ultimoDia)
+  return `${destino.getUTCFullYear()}-${dosDigitos(destino.getUTCMonth() + 1)}-${dosDigitos(diaFinal)}`
+}
+
+/** Días de diferencia entre dos fechas de calendario (b - a). */
+export function diferenciaDias(a: FechaISO, b: FechaISO): number {
+  const pa = partesFecha(a)
+  const pb = partesFecha(b)
+  const ms =
+    Date.UTC(pb.anio, pb.mes - 1, pb.dia) - Date.UTC(pa.anio, pa.mes - 1, pa.dia)
+  return Math.round(ms / 86400000)
+}
+
 export interface RangoMes {
   anio: number
   mes: number

@@ -34,6 +34,13 @@ const ConciliacionPage = lazy(() =>
 const ConfiguracionPage = lazy(() =>
   import('./pages/ConfiguracionPage').then((m) => ({ default: m.ConfiguracionPage })),
 )
+const CuotasPage = lazy(() => import('./pages/CuotasPage').then((m) => ({ default: m.CuotasPage })))
+const PlanDetallePage = lazy(() =>
+  import('./pages/PlanDetallePage').then((m) => ({ default: m.PlanDetallePage })),
+)
+const PlanCuotasFormPage = lazy(() =>
+  import('./pages/PlanCuotasFormPage').then((m) => ({ default: m.PlanCuotasFormPage })),
+)
 
 function PantallaCargando() {
   return (
@@ -100,6 +107,8 @@ export function App() {
             <Route path="/presupuestos" element={<PresupuestosPage />} />
             <Route path="/recurrentes" element={<RecurrentesPage />} />
             <Route path="/conciliacion" element={<ConciliacionPage />} />
+            <Route path="/cuotas" element={<CuotasPage />} />
+            <Route path="/cuotas/:id" element={<PlanDetallePage />} />
             <Route path="/configuracion" element={<ConfiguracionPage />} />
           </Route>
 
@@ -114,6 +123,7 @@ export function App() {
             />
             <Route path="/cuentas/nueva" element={<CuentaFormPage />} />
             <Route path="/cuentas/:id/editar" element={<CuentaFormPage modo="editar" />} />
+            <Route path="/cuotas/nueva" element={<PlanCuotasFormPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

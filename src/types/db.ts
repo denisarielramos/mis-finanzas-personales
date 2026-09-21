@@ -149,6 +149,8 @@ export interface Movimiento {
   estado: EstadoMovimiento
   conciliado: boolean | null
   referencia_externa: string | null
+  /** Lo completa `confirmar_recurrente`; nunca se escribe desde el frontend. */
+  recurrente_id?: UUID | null
   created_at: string | null
   updated_at: string | null
 }
@@ -208,7 +210,12 @@ export const ETIQUETA_FRECUENCIA: Record<FrecuenciaRecurrente, string> = {
   anual: 'Anual',
 }
 
-/** Fila de `public.recurrentes`. */
+/**
+ * Fila de `public.recurrentes`.
+ *
+ * Un recurrente es una previsión: NO afecta a los saldos hasta que se
+ * confirma con el RPC `confirmar_recurrente`.
+ */
 export interface Recurrente {
   id: UUID
   user_id: UUID
@@ -222,8 +229,124 @@ export interface Recurrente {
   generar_automaticamente: boolean
   activa: boolean
   descripcion: string | null
+  /** Día fijo del mes (1..31) o `null`. */
+  dia_mes: number | null
+  /** `true` cuando vence el último día de cada mes. */
+  ultimo_dia_mes: boolean
+  /** `true` cuando el monto puede variar y se ajusta al confirmar. */
+  monto_estimado: boolean
   created_at: string | null
   updated_at: string | null
+}
+
+/* ------------------------- Planes de cuotas ------------------------------ */
+
+export type EstadoPlanCuotas = 'activo' | 'completado' | 'cancelado'
+
+export const ETIQUETA_ESTADO_PLAN: Record<EstadoPlanCuotas, string> = {
+  activo: 'Activo',
+  completado: 'Completado',
+  cancelado: 'Cancelado',
+}
+
+/** Fila de `public.planes_cuotas`. */
+export interface PlanCuotas {
+  id: UUID
+  user_id: UUID
+  nombre: string
+  proveedor: string | null
+  descripcion: string | null
+  categoria_id: UUID | null
+  cuenta_preferida_id: UUID | null
+  monto_total: MontoPYG
+  cantidad_cuotas: number
+  fecha_compra: FechaISO
+  fecha_primera_cuota: FechaISO
+  frecuencia_meses: number
+  estado: EstadoPlanCuotas
+  notas: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+/** Fila de `public.v_planes_cuotas_resumen`. */
+export interface PlanCuotasResumen {
+  id: UUID
+  user_id: UUID
+  nombre: string
+  proveedor: string | null
+  descripcion: string | null
+  categoria_id: UUID | null
+  cuenta_preferida_id: UUID | null
+  monto_total: MontoPYG
+  cantidad_cuotas: number
+  fecha_compra: FechaISO
+  fecha_primera_cuota: FechaISO
+  frecuencia_meses: number
+  estado: EstadoPlanCuotas
+  cuotas_pagadas: number
+  cuotas_pendientes: number
+  monto_pagado: MontoPYG
+  saldo_pendiente: MontoPYG
+  proxima_cuota: FechaISO | null
+}
+
+export type EstadoCuota = 'pendiente' | 'pagada' | 'cancelada'
+
+export const ETIQUETA_ESTADO_CUOTA: Record<EstadoCuota, string> = {
+  pendiente: 'Pendiente',
+  pagada: 'Pagada',
+  cancelada: 'Cancelada',
+}
+
+/** Fila de `public.cuotas_plan`. */
+export interface CuotaPlan {
+  id: UUID
+  user_id: UUID
+  plan_id: UUID
+  numero: number
+  fecha_vencimiento: FechaISO
+  monto_programado: MontoPYG
+  estado: EstadoCuota
+  fecha_pago: FechaISO | null
+  monto_pagado: MontoPYG | null
+  movimiento_id: UUID | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+/* ----------------------- Próximos movimientos ---------------------------- */
+
+export type OrigenProximo = 'recurrente' | 'cuota'
+export type EstadoProximo = 'pendiente' | 'vencido'
+
+export const ETIQUETA_ESTADO_PROXIMO: Record<EstadoProximo, string> = {
+  pendiente: 'Pendiente',
+  vencido: 'Vencido',
+}
+
+/**
+ * Fila de `public.v_proximos_movimientos`.
+ *
+ * Es la fuente de los próximos cobros y pagos. Nada de esto existe todavía
+ * en `public.movimientos`: son previsiones y no afectan a ningún saldo.
+ */
+export interface ProximoMovimiento {
+  user_id: UUID
+  origen: OrigenProximo
+  /** Id del recurrente o de la cuota, según el origen. */
+  origen_id: UUID
+  grupo_id: UUID | null
+  tipo: TipoRecurrente
+  nombre: string
+  monto: MontoPYG
+  fecha: FechaISO
+  cuenta_id: UUID | null
+  categoria_id: UUID | null
+  estado: EstadoProximo
+  detalle: string | null
+  numero_cuota: number | null
+  total_cuotas: number | null
 }
 
 /** Resultado del RPC `buscar_transferencias_potenciales`. */

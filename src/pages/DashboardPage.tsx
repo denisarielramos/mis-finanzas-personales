@@ -1,9 +1,10 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Scale, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { CalendarClock, ChevronRight, Scale, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { SelectorMes } from '../components/SelectorMes'
 import { FilaOperacion } from '../components/FilaOperacion'
+import { ProximosMovimientos } from '../components/ProximosMovimientos'
 import { EsqueletoLista, EstadoVacio, Mensaje } from '../components/ui/Estados'
 import { Boton } from '../components/ui/Boton'
 import { iconoPorNombre } from '../components/ui/SelectorIcono'
@@ -11,8 +12,9 @@ import { useCatalogo } from '../hooks/useCatalogo'
 import { useCarga } from '../hooks/useCarga'
 import { calcularPatrimonio } from '../services/accountsService'
 import { listarMovimientos, resumenPeriodo } from '../services/movementsService'
+import { listarProximosMovimientos, resumirPlanificacion } from '../services/upcomingService'
 import { agruparOperaciones } from '../utils/movimientos'
-import { capitalizar, mesActual } from '../utils/date'
+import { capitalizar, hoyISO, mesActual, sumarDias } from '../utils/date'
 import { formatearGs } from '../utils/money'
 
 // El gráfico arrastra la librería de charts: se carga aparte para que la
@@ -31,17 +33,33 @@ export function DashboardPage() {
     cuentaPorId,
   } = useCatalogo()
   const [mes, setMes] = useState(() => mesActual())
+  // Se incrementa al confirmar un cobro o un pago, para recargar todo.
+  const [version, setVersion] = useState(0)
 
   const resumen = useCarga(
     () => resumenPeriodo(mes.desde, mes.hasta),
-    [mes.desde, mes.hasta],
+    [mes.desde, mes.hasta, version],
     'No se pudo calcular el resumen del mes.',
   )
 
   const ultimos = useCarga(
     () => listarMovimientos({ limite: 12 }),
-    [],
+    [version],
     'No se pudieron cargar los últimos movimientos.',
+  )
+
+  // Previsiones del mes seleccionado (para los totales de planificación).
+  const previstoMes = useCarga(
+    () => listarProximosMovimientos({ desde: mes.desde, hasta: mes.hasta }),
+    [mes.desde, mes.hasta, version],
+    'No se pudo calcular la planificación del mes.',
+  )
+
+  // Próximos cobros y pagos: siempre desde hoy, incluidos los vencidos.
+  const proximos = useCarga(
+    () => listarProximosMovimientos({ hasta: sumarDias(hoyISO(), 60), limite: 8 }),
+    [version],
+    'No se pudieron cargar los próximos movimientos.',
   )
 
   const patrimonio = useMemo(() => calcularPatrimonio(saldos), [saldos])
@@ -55,6 +73,21 @@ export function DashboardPage() {
   )
 
   const totalCuentasIncluidas = saldos.filter((s) => s.activa && s.incluir_en_total).length
+
+  const planificacion = useMemo(
+    () => resumirPlanificacion(previstoMes.datos ?? []),
+    [previstoMes.datos],
+  )
+
+  const actual = mesActual()
+  const esMesActual = mes.anio === actual.anio && mes.mes === actual.mes
+
+  /**
+   * Disponible proyectado = patrimonio real + cobros pendientes − pagos
+   * pendientes. Solo tiene sentido en el mes en curso: para otros meses no se
+   * muestra, porque ignoraría lo que pase en los meses intermedios.
+   */
+  const disponibleProyectado = patrimonio + planificacion.flujoPrevisto
 
   return (
     <>
@@ -116,6 +149,86 @@ export function DashboardPage() {
             Las transferencias entre tus cuentas no cuentan como ingreso ni como gasto.
           </p>
           {resumen.error ? <Mensaje tipo="error">{resumen.error}</Mensaje> : null}
+        </section>
+
+        <section className="seccion" aria-label="Planificación del mes">
+          <div className="seccion__cabecera">
+            <h2 className="seccion__titulo">Planificación</h2>
+            {planificacion.vencidos > 0 ? (
+              <span className="etiqueta etiqueta--negativo">
+                {planificacion.vencidos} vencido{planificacion.vencidos === 1 ? '' : 's'}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="resumen">
+            <div className="resumen__celda">
+              <span className="resumen__etiqueta">
+                <TrendingUp size={13} aria-hidden="true" />{' '}
+                {esMesActual ? 'Ingresos pendientes' : 'Ingresos previstos'}
+              </span>
+              <p className="resumen__valor numero texto-positivo">
+                {previstoMes.cargando ? '—' : formatearGs(planificacion.ingresosPendientes)}
+              </p>
+            </div>
+            <div className="resumen__celda">
+              <span className="resumen__etiqueta">
+                <TrendingDown size={13} aria-hidden="true" />{' '}
+                {esMesActual ? 'Pagos pendientes' : 'Gastos previstos'}
+              </span>
+              <p className="resumen__valor numero texto-negativo">
+                {previstoMes.cargando ? '—' : formatearGs(planificacion.pagosPendientes)}
+              </p>
+            </div>
+            <div className="resumen__celda">
+              <span className="resumen__etiqueta">
+                <Scale size={13} aria-hidden="true" /> Flujo previsto
+              </span>
+              <p
+                className={`resumen__valor numero ${planificacion.flujoPrevisto < 0 ? 'texto-negativo' : ''}`}
+              >
+                {previstoMes.cargando ? '—' : formatearGs(planificacion.flujoPrevisto)}
+              </p>
+            </div>
+          </div>
+
+          {esMesActual ? (
+            <div className="tarjeta" style={{ marginTop: 8 }}>
+              <div className="linea-proyectada">
+                <span className="linea-proyectada__etiqueta">Disponible proyectado</span>
+                <span
+                  className={`linea-proyectada__valor numero ${disponibleProyectado < 0 ? 'texto-negativo' : ''}`}
+                >
+                  {cargandoCatalogo || previstoMes.cargando
+                    ? '—'
+                    : formatearGs(disponibleProyectado)}
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          <p className="campo__ayuda" style={{ marginTop: 8 }}>
+            {esMesActual
+              ? 'Patrimonio actual más los cobros pendientes, menos los pagos pendientes de este mes. Lo previsto no cambia tus saldos hasta que lo confirmas.'
+              : 'Previsiones de ese mes. No incluyen lo que ocurra en los meses intermedios.'}
+          </p>
+          {previstoMes.error ? <Mensaje tipo="error">{previstoMes.error}</Mensaje> : null}
+        </section>
+
+        <section className="seccion" aria-label="Próximos movimientos">
+          <div className="seccion__cabecera">
+            <h2 className="seccion__titulo">Próximos movimientos</h2>
+            <span className="campo__ayuda">
+              <CalendarClock size={13} aria-hidden="true" /> Cobros y pagos previstos
+            </span>
+          </div>
+
+          <ProximosMovimientos
+            proximos={proximos.datos ?? []}
+            cargando={proximos.cargando}
+            error={proximos.error}
+            onCambio={() => setVersion((v) => v + 1)}
+          />
         </section>
 
         <div className="rejilla-escritorio">

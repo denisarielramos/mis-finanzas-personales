@@ -1,16 +1,20 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { ChevronRight, Plus, Repeat } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Plus, Repeat } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
 import { Campo } from '../components/ui/Campo'
 import { InputMonto } from '../components/ui/CampoMonto'
 import { Hoja } from '../components/ui/Hoja'
 import { Interruptor } from '../components/ui/Interruptor'
+import { Segmentos } from '../components/ui/Segmentos'
 import { EsqueletoLista, EstadoVacio, Mensaje } from '../components/ui/Estados'
+import {
+  HojaConfirmarRecurrente,
+  type PrevistoRecurrente,
+} from '../components/HojaConfirmarRecurrente'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { useCarga } from '../hooks/useCarga'
 import { useAvisos } from '../hooks/useToast'
-import { useConexion } from '../hooks/useConexion'
 import {
   actualizarRecurrente,
   crearRecurrente,
@@ -27,9 +31,16 @@ import {
   type TipoRecurrente,
   type UUID,
 } from '../types/db'
-import { formatearFecha, hoyISO } from '../utils/date'
+import { formatearFecha, hoyISO, partesFecha } from '../utils/date'
 import { formatearGs, parsearEntradaMonto } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
+
+type ModoDia = 'fijo' | 'ultimo'
+
+const OPCIONES_DIA: { valor: ModoDia; etiqueta: string }[] = [
+  { valor: 'fijo', etiqueta: 'Día fijo del mes' },
+  { valor: 'ultimo', etiqueta: 'Último día del mes' },
+]
 
 interface EstadoFormulario {
   id: UUID | null
@@ -43,9 +54,13 @@ interface EstadoFormulario {
   descripcion: string
   generarAutomaticamente: boolean
   activa: boolean
+  modoDia: ModoDia
+  diaMes: string
+  montoEstimado: boolean
 }
 
 function formularioVacio(cuentaPorDefecto: UUID | ''): EstadoFormulario {
+  const hoy = hoyISO()
   return {
     id: null,
     nombre: '',
@@ -54,29 +69,32 @@ function formularioVacio(cuentaPorDefecto: UUID | ''): EstadoFormulario {
     cuentaId: cuentaPorDefecto,
     categoriaId: '',
     frecuencia: 'mensual',
-    proximaFecha: hoyISO(),
+    proximaFecha: hoy,
     descripcion: '',
     generarAutomaticamente: false,
     activa: true,
+    modoDia: 'fijo',
+    diaMes: String(partesFecha(hoy).dia),
+    montoEstimado: false,
   }
 }
 
 /**
- * Recurrentes: movimientos que se repiten.
+ * Recurrentes: ingresos y gastos previstos que se repiten.
  *
- * Esta pantalla solo guarda la configuración en `public.recurrentes`.
- * La generación de los movimientos depende de un proceso del backend:
- * la aplicación nunca los crea desde el navegador.
+ * Un recurrente NO afecta a los saldos: es una previsión. El movimiento real
+ * solo se crea al pulsar «Confirmar», que llama a `confirmar_recurrente`.
+ * La aplicación nunca genera movimientos por su cuenta desde el navegador.
  */
 export function RecurrentesPage() {
   const { cuentas, categorias } = useCatalogo()
   const avisos = useAvisos()
-  const enLinea = useConexion()
 
   const [version, setVersion] = useState(0)
   const [formulario, setFormulario] = useState<EstadoFormulario | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [errores, setErrores] = useState<Record<string, string>>({})
+  const [previsto, setPrevisto] = useState<PrevistoRecurrente | null>(null)
 
   const { datos, cargando, error } = useCarga(
     () => listarRecurrentes(),
@@ -115,6 +133,22 @@ export function RecurrentesPage() {
       descripcion: recurrente.descripcion ?? '',
       generarAutomaticamente: recurrente.generar_automaticamente,
       activa: recurrente.activa,
+      modoDia: recurrente.ultimo_dia_mes ? 'ultimo' : 'fijo',
+      diaMes: recurrente.dia_mes ? String(recurrente.dia_mes) : '',
+      montoEstimado: recurrente.monto_estimado,
+    })
+  }
+
+  function abrirConfirmacion(recurrente: Recurrente) {
+    setPrevisto({
+      id: recurrente.id,
+      nombre: recurrente.nombre,
+      monto: recurrente.monto,
+      fecha: recurrente.proxima_fecha,
+      cuentaId: recurrente.cuenta_id,
+      tipo: recurrente.tipo,
+      montoEstimado: recurrente.monto_estimado,
+      descripcion: recurrente.descripcion,
     })
   }
 
@@ -134,10 +168,9 @@ export function RecurrentesPage() {
     e.preventDefault()
     if (!formulario || guardando) return
 
-    if (!enLinea) {
-      avisos.error('Sin conexión: no se puede guardar ahora.')
-      return
-    }
+    const esMensual = formulario.frecuencia === 'mensual'
+    const usaDiaFijo = esMensual && formulario.modoDia === 'fijo'
+    const diaMes = formulario.diaMes.trim() ? Number.parseInt(formulario.diaMes, 10) : null
 
     const nuevos: Record<string, string> = {}
     if (!formulario.nombre.trim()) nuevos.nombre = 'Escribe un nombre para el recurrente.'
@@ -146,6 +179,9 @@ export function RecurrentesPage() {
     }
     if (!formulario.cuentaId) nuevos.cuenta = 'Elige una cuenta.'
     if (!formulario.proximaFecha) nuevos.proximaFecha = 'Elige la próxima fecha.'
+    if (usaDiaFijo && diaMes !== null && (Number.isNaN(diaMes) || diaMes < 1 || diaMes > 31)) {
+      nuevos.diaMes = 'El día debe estar entre 1 y 31.'
+    }
 
     setErrores(nuevos)
     if (Object.keys(nuevos).length > 0) return
@@ -163,6 +199,10 @@ export function RecurrentesPage() {
         generar_automaticamente: formulario.generarAutomaticamente,
         activa: formulario.activa,
         descripcion: formulario.descripcion || null,
+        // El día solo tiene sentido en la frecuencia mensual.
+        dia_mes: usaDiaFijo ? diaMes : null,
+        ultimo_dia_mes: esMensual && formulario.modoDia === 'ultimo',
+        monto_estimado: formulario.montoEstimado,
       }
 
       if (formulario.id) {
@@ -181,6 +221,8 @@ export function RecurrentesPage() {
       setGuardando(false)
     }
   }
+
+  const esMensual = formulario?.frecuencia === 'mensual'
 
   return (
     <>
@@ -207,7 +249,7 @@ export function RecurrentesPage() {
         ) : recurrentes.length === 0 ? (
           <EstadoVacio
             titulo="Todavía no tienes movimientos recurrentes."
-            texto="Aquí se configuran los movimientos que se repiten, como el alquiler o un servicio mensual."
+            texto="Aquí se configuran los ingresos y gastos previstos que se repiten, como el salario o el alquiler."
             icono={<Repeat size={22} aria-hidden="true" />}
             accion={
               <Boton variante="primario" onClick={abrirNuevo}>
@@ -217,52 +259,78 @@ export function RecurrentesPage() {
           />
         ) : (
           <ul className="lista">
-            {recurrentes.map((recurrente) => (
-              <li key={recurrente.id}>
-                <button
-                  type="button"
-                  className="lista__item"
-                  style={{ opacity: recurrente.activa ? 1 : 0.6 }}
-                  onClick={() => abrirEdicion(recurrente)}
-                >
-                  <span
-                    className={`icono-circular ${recurrente.tipo === 'ingreso' ? 'icono-circular--positivo' : 'icono-circular--negativo'}`}
-                    aria-hidden="true"
+            {recurrentes.map((recurrente) => {
+              const esIngreso = recurrente.tipo === 'ingreso'
+              const vencimiento = recurrente.ultimo_dia_mes
+                ? 'último día'
+                : recurrente.dia_mes
+                  ? `día ${recurrente.dia_mes}`
+                  : null
+
+              return (
+                <li className="fila-con-accion" key={recurrente.id}>
+                  <button
+                    type="button"
+                    className="lista__item"
+                    style={{ opacity: recurrente.activa ? 1 : 0.6 }}
+                    onClick={() => abrirEdicion(recurrente)}
                   >
-                    <Repeat size={18} />
-                  </span>
-                  <span className="lista__cuerpo">
-                    <span className="lista__titulo">{recurrente.nombre}</span>
-                    <span className="lista__detalle">
-                      {[
-                        ETIQUETA_FRECUENCIA[recurrente.frecuencia] ?? recurrente.frecuencia,
-                        // En un recurrente desactivado la próxima fecha no aplica.
-                        recurrente.activa
-                          ? formatearFecha(recurrente.proxima_fecha)
-                          : 'Desactivado',
-                      ].join(' · ')}
+                    <span
+                      className={`icono-circular ${esIngreso ? 'icono-circular--positivo' : 'icono-circular--negativo'}`}
+                      aria-hidden="true"
+                    >
+                      <Repeat size={18} />
                     </span>
-                  </span>
-                  <span
-                    className={`lista__monto numero ${recurrente.tipo === 'ingreso' ? 'texto-positivo' : 'texto-negativo'}`}
-                  >
-                    {formatearGs(
-                      recurrente.tipo === 'ingreso' ? recurrente.monto : -recurrente.monto,
-                      { signo: recurrente.tipo === 'ingreso' ? 'siempre' : 'auto' },
-                    )}
-                  </span>
-                  <ChevronRight size={18} className="lista__flecha" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
+                    <span className="lista__cuerpo">
+                      <span className="lista__titulo">{recurrente.nombre}</span>
+                      <span className="lista__detalle">
+                        {[
+                          ETIQUETA_FRECUENCIA[recurrente.frecuencia] ?? recurrente.frecuencia,
+                          vencimiento,
+                          recurrente.activa
+                            ? formatearFecha(recurrente.proxima_fecha)
+                            : 'Desactivado',
+                          recurrente.monto_estimado ? 'estimado' : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </span>
+                    <span
+                      className={`lista__monto numero ${esIngreso ? 'texto-positivo' : 'texto-negativo'}`}
+                    >
+                      {formatearGs(esIngreso ? recurrente.monto : -recurrente.monto, {
+                        signo: esIngreso ? 'siempre' : 'auto',
+                      })}
+                    </span>
+                    <ChevronRight size={18} className="lista__flecha" aria-hidden="true" />
+                  </button>
+
+                  {recurrente.activa ? (
+                    <span className="fila-con-accion__accion">
+                      <Boton
+                        variante="secundario"
+                        tamano="pequeno"
+                        onClick={() => abrirConfirmacion(recurrente)}
+                        aria-label={`Confirmar ${recurrente.nombre}`}
+                      >
+                        <CheckCircle2 size={15} aria-hidden="true" />
+                        Confirmar
+                      </Boton>
+                    </span>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
         )}
 
         <div style={{ marginTop: 16 }}>
           <Mensaje tipo="info">
-            Esta pantalla guarda la configuración de los recurrentes. La generación automática de
-            movimientos depende de un proceso del backend (por ejemplo, una tarea programada en la
-            base de datos): la aplicación no crea movimientos por su cuenta desde el navegador.
+            Los recurrentes son previsiones: no cambian tus saldos. Al pulsar «Confirmar» se crea
+            el movimiento real y se avanza la próxima fecha. La generación automática, si la
+            activas, depende de un proceso del backend: la aplicación no crea movimientos por su
+            cuenta desde el navegador.
           </Mensaje>
         </div>
       </div>
@@ -280,7 +348,7 @@ export function RecurrentesPage() {
                   {...props}
                   className="control"
                   type="text"
-                  placeholder="Alquiler"
+                  placeholder="Salario - Primera quincena"
                   value={formulario.nombre}
                   maxLength={80}
                   onChange={(e) => setFormulario({ ...formulario, nombre: e.target.value })}
@@ -305,7 +373,7 @@ export function RecurrentesPage() {
               )}
             </Campo>
 
-            <Campo etiqueta="Monto" error={errores.monto}>
+            <Campo etiqueta="Monto esperado" error={errores.monto}>
               {(props) => (
                 <InputMonto
                   {...props}
@@ -314,6 +382,13 @@ export function RecurrentesPage() {
                 />
               )}
             </Campo>
+
+            <Interruptor
+              etiqueta="Monto estimado"
+              descripcion="Actívalo si el importe varía; podrás ajustarlo al confirmar."
+              activo={formulario.montoEstimado}
+              onCambio={(montoEstimado) => setFormulario({ ...formulario, montoEstimado })}
+            />
 
             <Campo etiqueta="Cuenta" error={errores.cuenta}>
               {(props) => (
@@ -383,6 +458,42 @@ export function RecurrentesPage() {
               )}
             </Campo>
 
+            {esMensual ? (
+              <>
+                <div className="campo">
+                  <span className="campo__etiqueta">Vencimiento mensual</span>
+                  <Segmentos
+                    opciones={OPCIONES_DIA}
+                    valor={formulario.modoDia}
+                    onCambio={(modoDia) => setFormulario({ ...formulario, modoDia })}
+                    etiquetaAccesible="Vencimiento mensual"
+                  />
+                </div>
+
+                {formulario.modoDia === 'fijo' ? (
+                  <Campo
+                    etiqueta="Día del mes"
+                    error={errores.diaMes}
+                    ayuda="Entre 1 y 31. Déjalo vacío para usar el día de la próxima fecha."
+                  >
+                    {(props) => (
+                      <input
+                        {...props}
+                        className="control numero"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={31}
+                        placeholder="10"
+                        value={formulario.diaMes}
+                        onChange={(e) => setFormulario({ ...formulario, diaMes: e.target.value })}
+                      />
+                    )}
+                  </Campo>
+                ) : null}
+              </>
+            ) : null}
+
             <Campo etiqueta="Próxima fecha" error={errores.proximaFecha}>
               {(props) => (
                 <input
@@ -440,6 +551,12 @@ export function RecurrentesPage() {
           </form>
         ) : null}
       </Hoja>
+
+      <HojaConfirmarRecurrente
+        previsto={previsto}
+        onCerrar={() => setPrevisto(null)}
+        onConfirmado={() => setVersion((v) => v + 1)}
+      />
     </>
   )
 }
