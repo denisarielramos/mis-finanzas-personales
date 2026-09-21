@@ -150,7 +150,9 @@ export interface Movimiento {
   conciliado: boolean | null
   referencia_externa: string | null
   /** Lo completa `confirmar_recurrente`; nunca se escribe desde el frontend. */
-  recurrente_id?: UUID | null
+  recurrente_id: UUID | null
+  /** Lo completa `confirmar_cuota_plan`; nunca se escribe desde el frontend. */
+  cuota_plan_id: UUID | null
   created_at: string | null
   updated_at: string | null
 }
