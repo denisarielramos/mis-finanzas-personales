@@ -106,6 +106,7 @@ export function App() {
             <Route path="/categorias" element={<CategoriasPage />} />
             <Route path="/presupuestos" element={<PresupuestosPage />} />
             <Route path="/recurrentes" element={<RecurrentesPage />} />
+            <Route path="/gastos-fijos" element={<RecurrentesPage enfoque="gastos-fijos" />} />
             <Route path="/conciliacion" element={<ConciliacionPage />} />
             <Route path="/cuotas" element={<CuotasPage />} />
             <Route path="/cuotas/:id" element={<PlanDetallePage />} />

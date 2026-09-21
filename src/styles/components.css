@@ -312,6 +312,14 @@
   white-space: nowrap;
 }
 
+/* Periodicidad bajo el importe: «/ mes» */
+.lista__periodo {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  color: var(--texto-tenue);
+}
+
 .lista__flecha {
   color: var(--texto-tenue);
   flex-shrink: 0;

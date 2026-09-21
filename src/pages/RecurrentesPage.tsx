@@ -1,9 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { CheckCircle2, ChevronRight, Plus, Repeat } from 'lucide-react'
+import { Ban, CheckCircle2, ChevronRight, Plus, Repeat } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
 import { Campo } from '../components/ui/Campo'
 import { InputMonto } from '../components/ui/CampoMonto'
+import { Dialogo } from '../components/ui/Dialogo'
 import { Hoja } from '../components/ui/Hoja'
 import { Interruptor } from '../components/ui/Interruptor'
 import { Segmentos } from '../components/ui/Segmentos'
@@ -17,6 +18,7 @@ import { useCarga } from '../hooks/useCarga'
 import { useAvisos } from '../hooks/useToast'
 import {
   actualizarRecurrente,
+  cambiarEstadoRecurrente,
   crearRecurrente,
   listarRecurrentes,
 } from '../services/recurringService'
@@ -42,6 +44,15 @@ const OPCIONES_DIA: { valor: ModoDia; etiqueta: string }[] = [
   { valor: 'ultimo', etiqueta: 'Último día del mes' },
 ]
 
+/** Ejemplos de gastos fijos habituales, solo como pista en el formulario. */
+const EJEMPLOS_GASTO_FIJO =
+  'Contabilidad, Internet, Seguro, Cuota de asociación, servicios mensuales…'
+
+const OPCIONES_MONTO: { valor: 'fijo' | 'estimado'; etiqueta: string }[] = [
+  { valor: 'fijo', etiqueta: 'Monto fijo' },
+  { valor: 'estimado', etiqueta: 'Monto estimado' },
+]
+
 interface EstadoFormulario {
   id: UUID | null
   nombre: string
@@ -57,6 +68,33 @@ interface EstadoFormulario {
   modoDia: ModoDia
   diaMes: string
   montoEstimado: boolean
+}
+
+/**
+ * Primera fecha de vencimiento a partir de hoy para un día del mes dado.
+ * Si el día ya pasó este mes, se va al mes siguiente; si el mes no tiene ese
+ * día (31 en febrero), se usa el último día disponible.
+ */
+function proximaFechaPorDia(modoDia: ModoDia, diaMes: string): string {
+  const hoy = hoyISO()
+  const { anio, mes } = partesFecha(hoy)
+  const dd = (n: number) => String(n).padStart(2, '0')
+
+  const calcular = (a: number, m: number) => {
+    const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate()
+    const pedido = Number.parseInt(diaMes, 10)
+    const dia =
+      modoDia === 'ultimo'
+        ? ultimo
+        : Math.min(Math.max(Number.isFinite(pedido) ? pedido : 1, 1), ultimo)
+    return `${a}-${dd(m)}-${dd(dia)}`
+  }
+
+  const esteMes = calcular(anio, mes)
+  if (esteMes >= hoy) return esteMes
+
+  const siguiente = new Date(Date.UTC(anio, mes, 1))
+  return calcular(siguiente.getUTCFullYear(), siguiente.getUTCMonth() + 1)
 }
 
 function formularioVacio(cuentaPorDefecto: UUID | ''): EstadoFormulario {
@@ -79,22 +117,40 @@ function formularioVacio(cuentaPorDefecto: UUID | ''): EstadoFormulario {
   }
 }
 
+interface Props {
+  /**
+   * `gastos-fijos` muestra solo los gastos periódicos sin fin (tipo `gasto`,
+   * frecuencia mensual). Es la misma pantalla y el mismo servicio: solo
+   * cambia el enfoque, no la lógica.
+   */
+  enfoque?: 'todos' | 'gastos-fijos'
+}
+
 /**
  * Recurrentes: ingresos y gastos previstos que se repiten.
  *
  * Un recurrente NO afecta a los saldos: es una previsión. El movimiento real
  * solo se crea al pulsar «Confirmar», que llama a `confirmar_recurrente`.
  * La aplicación nunca genera movimientos por su cuenta desde el navegador.
+ *
+ * Con `enfoque="gastos-fijos"` la pantalla se presenta como «Gastos fijos»:
+ * gastos mensuales sin cantidad de cuotas ni fecha final, que siguen hasta
+ * que se cancelan (`activa = false`). Las compras con un número finito de
+ * pagos viven en el módulo de Cuotas, que es otra cosa.
  */
-export function RecurrentesPage() {
+export function RecurrentesPage({ enfoque = 'todos' }: Props) {
   const { cuentas, categorias } = useCatalogo()
   const avisos = useAvisos()
+
+  const soloGastosFijos = enfoque === 'gastos-fijos'
 
   const [version, setVersion] = useState(0)
   const [formulario, setFormulario] = useState<EstadoFormulario | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [errores, setErrores] = useState<Record<string, string>>({})
   const [previsto, setPrevisto] = useState<PrevistoRecurrente | null>(null)
+  const [confirmandoEstado, setConfirmandoEstado] = useState<Recurrente | null>(null)
+  const [cambiandoEstado, setCambiandoEstado] = useState(false)
 
   const { datos, cargando, error } = useCarga(
     () => listarRecurrentes(),
@@ -102,7 +158,10 @@ export function RecurrentesPage() {
     'No se pudieron cargar los recurrentes.',
   )
 
-  const recurrentes = useMemo(() => datos ?? [], [datos])
+  const recurrentes = useMemo(
+    () => (datos ?? []).filter((r) => !soloGastosFijos || r.tipo === 'gasto'),
+    [datos, soloGastosFijos],
+  )
   const cuentasActivas = useMemo(() => cuentas.filter((c) => c.activa), [cuentas])
 
   const categoriasDisponibles = useMemo(
@@ -112,11 +171,38 @@ export function RecurrentesPage() {
 
   function abrirNuevo() {
     if (cuentasActivas.length === 0) {
-      avisos.error('Necesitas al menos una cuenta activa para crear un recurrente.')
+      avisos.error(
+        soloGastosFijos
+          ? 'Necesitas al menos una cuenta activa para crear un gasto fijo.'
+          : 'Necesitas al menos una cuenta activa para crear un recurrente.',
+      )
       return
     }
     setErrores({})
+    // Un gasto fijo siempre es un gasto mensual.
     setFormulario(formularioVacio(cuentasActivas[0].id))
+  }
+
+  /** Cancela (activa = false) o reactiva un gasto fijo, sin borrar nada. */
+  async function alternarEstado() {
+    if (!confirmandoEstado) return
+    const volverActivo = !confirmandoEstado.activa
+
+    setCambiandoEstado(true)
+    try {
+      await cambiarEstadoRecurrente(confirmandoEstado.id, volverActivo)
+      avisos.exito(
+        volverActivo
+          ? 'Gasto fijo reactivado correctamente.'
+          : 'Gasto fijo cancelado correctamente.',
+      )
+      setConfirmandoEstado(null)
+      setVersion((v) => v + 1)
+    } catch (e) {
+      avisos.error(textoDeExcepcion(e, 'No se pudo cambiar el estado del gasto fijo.'))
+    } finally {
+      setCambiandoEstado(false)
+    }
   }
 
   function abrirEdicion(recurrente: Recurrente) {
@@ -224,16 +310,27 @@ export function RecurrentesPage() {
 
   const esMensual = formulario?.frecuencia === 'mensual'
 
+  /**
+   * Al crear un gasto fijo, la próxima fecha sigue al día de vencimiento
+   * elegido. Al editar no se toca: la fecha vigente la manda el RPC.
+   */
+  function nuevaProximaFecha(modoDia: ModoDia, diaMes: string): string {
+    if (!formulario) return ''
+    if (!soloGastosFijos || formulario.id) return formulario.proximaFecha
+    return proximaFechaPorDia(modoDia, diaMes)
+  }
+
   return (
     <>
       <Encabezado
-        titulo="Recurrentes"
+        titulo={soloGastosFijos ? 'Gastos fijos' : 'Recurrentes'}
+        subtitulo={soloGastosFijos ? 'Pagos mensuales hasta que los canceles' : undefined}
         volver="/mas"
         acciones={
           <button
             type="button"
             className="boton-icono"
-            aria-label="Nuevo recurrente"
+            aria-label={soloGastosFijos ? 'Nuevo gasto fijo' : 'Nuevo recurrente'}
             onClick={abrirNuevo}
           >
             <Plus size={20} aria-hidden="true" />
@@ -248,12 +345,20 @@ export function RecurrentesPage() {
           <EsqueletoLista filas={3} />
         ) : recurrentes.length === 0 ? (
           <EstadoVacio
-            titulo="Todavía no tienes movimientos recurrentes."
-            texto="Aquí se configuran los ingresos y gastos previstos que se repiten, como el salario o el alquiler."
+            titulo={
+              soloGastosFijos
+                ? 'Todavía no tienes gastos fijos.'
+                : 'Todavía no tienes movimientos recurrentes.'
+            }
+            texto={
+              soloGastosFijos
+                ? `Son los pagos que se repiten cada mes sin fecha final: ${EJEMPLOS_GASTO_FIJO}`
+                : 'Aquí se configuran los ingresos y gastos previstos que se repiten, como el salario o el alquiler.'
+            }
             icono={<Repeat size={22} aria-hidden="true" />}
             accion={
               <Boton variante="primario" onClick={abrirNuevo}>
-                Crear recurrente
+                {soloGastosFijos ? 'Crear gasto fijo' : 'Crear recurrente'}
               </Boton>
             }
           />
@@ -268,7 +373,10 @@ export function RecurrentesPage() {
                   : null
 
               return (
-                <li className="fila-con-accion" key={recurrente.id}>
+                <li
+                  className={`fila-con-accion${recurrente.activa ? ' fila-con-accion--apilada' : ''}`}
+                  key={recurrente.id}
+                >
                   <button
                     type="button"
                     className="lista__item"
@@ -284,17 +392,39 @@ export function RecurrentesPage() {
                     <span className="lista__cuerpo">
                       <span className="lista__titulo">{recurrente.nombre}</span>
                       <span className="lista__detalle">
-                        {[
-                          ETIQUETA_FRECUENCIA[recurrente.frecuencia] ?? recurrente.frecuencia,
-                          vencimiento,
-                          recurrente.activa
-                            ? formatearFecha(recurrente.proxima_fecha)
-                            : 'Desactivado',
-                          recurrente.monto_estimado ? 'estimado' : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
+                        {soloGastosFijos
+                          ? [
+                              vencimiento ? `Vence: ${vencimiento}` : null,
+                              recurrente.monto_estimado ? 'monto estimado' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') || 'Mensual'
+                          : [
+                              ETIQUETA_FRECUENCIA[recurrente.frecuencia] ??
+                                recurrente.frecuencia,
+                              vencimiento,
+                              recurrente.activa
+                                ? formatearFecha(recurrente.proxima_fecha)
+                                : 'Desactivado',
+                              recurrente.monto_estimado ? 'estimado' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                       </span>
+                      {soloGastosFijos ? (
+                        <span className="lista__momento">
+                          {recurrente.activa ? (
+                            <>
+                              Próximo pago:{' '}
+                              <span className="numero">
+                                {formatearFecha(recurrente.proxima_fecha)}
+                              </span>
+                            </>
+                          ) : (
+                            'Cancelado'
+                          )}
+                        </span>
+                      ) : null}
                     </span>
                     <span
                       className={`lista__monto numero ${esIngreso ? 'texto-positivo' : 'texto-negativo'}`}
@@ -302,6 +432,7 @@ export function RecurrentesPage() {
                       {formatearGs(esIngreso ? recurrente.monto : -recurrente.monto, {
                         signo: esIngreso ? 'siempre' : 'auto',
                       })}
+                      {soloGastosFijos ? <span className="lista__periodo">/ mes</span> : null}
                     </span>
                     <ChevronRight size={18} className="lista__flecha" aria-hidden="true" />
                   </button>
@@ -327,28 +458,39 @@ export function RecurrentesPage() {
 
         <div style={{ marginTop: 16 }}>
           <Mensaje tipo="info">
-            Los recurrentes son previsiones: no cambian tus saldos. Al pulsar «Confirmar» se crea
-            el movimiento real y se avanza la próxima fecha. La generación automática, si la
-            activas, depende de un proceso del backend: la aplicación no crea movimientos por su
-            cuenta desde el navegador.
+            {soloGastosFijos
+              ? 'Un gasto fijo se repite cada mes sin fecha final hasta que lo canceles. No cambia tus saldos: solo al pulsar «Confirmar» se crea el gasto real y se avanza al mes siguiente. Para compras con una cantidad concreta de pagos usa Cuotas.'
+              : 'Los recurrentes son previsiones: no cambian tus saldos. Al pulsar «Confirmar» se crea el movimiento real y se avanza la próxima fecha. La generación automática, si la activas, depende de un proceso del backend: la aplicación no crea movimientos por su cuenta desde el navegador.'}
           </Mensaje>
         </div>
       </div>
 
       <Hoja
         abierta={formulario !== null}
-        titulo={formulario?.id ? 'Editar recurrente' : 'Nuevo recurrente'}
+        titulo={
+          soloGastosFijos
+            ? formulario?.id
+              ? 'Editar gasto fijo'
+              : 'Nuevo gasto fijo'
+            : formulario?.id
+              ? 'Editar recurrente'
+              : 'Nuevo recurrente'
+        }
         onCerrar={() => (guardando ? undefined : setFormulario(null))}
       >
         {formulario ? (
           <form className="formulario" onSubmit={guardar} noValidate>
-            <Campo etiqueta="Nombre" error={errores.nombre}>
+            <Campo
+              etiqueta="Nombre"
+              error={errores.nombre}
+              ayuda={soloGastosFijos ? `Por ejemplo: ${EJEMPLOS_GASTO_FIJO}` : undefined}
+            >
               {(props) => (
                 <input
                   {...props}
                   className="control"
                   type="text"
-                  placeholder="Salario - Primera quincena"
+                  placeholder={soloGastosFijos ? 'Contabilidad' : 'Salario - Primera quincena'}
                   value={formulario.nombre}
                   maxLength={80}
                   onChange={(e) => setFormulario({ ...formulario, nombre: e.target.value })}
@@ -356,24 +498,30 @@ export function RecurrentesPage() {
               )}
             </Campo>
 
-            <Campo etiqueta="Tipo">
-              {(props) => (
-                <select
-                  {...props}
-                  className="control"
-                  value={formulario.tipo}
-                  onChange={(e) => cambiarTipo(e.target.value as TipoRecurrente)}
-                >
-                  {TIPOS_RECURRENTE.map((valor) => (
-                    <option key={valor} value={valor}>
-                      {ETIQUETA_TIPO_RECURRENTE[valor]}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Campo>
+            {/* En gastos fijos el tipo siempre es «gasto»: no se pregunta. */}
+            {soloGastosFijos ? null : (
+              <Campo etiqueta="Tipo">
+                {(props) => (
+                  <select
+                    {...props}
+                    className="control"
+                    value={formulario.tipo}
+                    onChange={(e) => cambiarTipo(e.target.value as TipoRecurrente)}
+                  >
+                    {TIPOS_RECURRENTE.map((valor) => (
+                      <option key={valor} value={valor}>
+                        {ETIQUETA_TIPO_RECURRENTE[valor]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Campo>
+            )}
 
-            <Campo etiqueta="Monto esperado" error={errores.monto}>
+            <Campo
+              etiqueta={soloGastosFijos ? 'Monto mensual' : 'Monto esperado'}
+              error={errores.monto}
+            >
               {(props) => (
                 <InputMonto
                   {...props}
@@ -383,12 +531,20 @@ export function RecurrentesPage() {
               )}
             </Campo>
 
-            <Interruptor
-              etiqueta="Monto estimado"
-              descripcion="Actívalo si el importe varía; podrás ajustarlo al confirmar."
-              activo={formulario.montoEstimado}
-              onCambio={(montoEstimado) => setFormulario({ ...formulario, montoEstimado })}
-            />
+            <div className="campo">
+              <span className="campo__etiqueta">Tipo de monto</span>
+              <Segmentos
+                opciones={OPCIONES_MONTO}
+                valor={formulario.montoEstimado ? 'estimado' : 'fijo'}
+                onCambio={(valor) =>
+                  setFormulario({ ...formulario, montoEstimado: valor === 'estimado' })
+                }
+                etiquetaAccesible="Tipo de monto"
+              />
+              <span className="campo__ayuda">
+                Con «Monto estimado» podrás ajustar el importe real al confirmar.
+              </span>
+            </div>
 
             <Campo etiqueta="Cuenta" error={errores.cuenta}>
               {(props) => (
@@ -436,36 +592,47 @@ export function RecurrentesPage() {
               )}
             </Campo>
 
-            <Campo etiqueta="Frecuencia">
-              {(props) => (
-                <select
-                  {...props}
-                  className="control"
-                  value={formulario.frecuencia}
-                  onChange={(e) =>
-                    setFormulario({
-                      ...formulario,
-                      frecuencia: e.target.value as FrecuenciaRecurrente,
-                    })
-                  }
-                >
-                  {FRECUENCIAS_RECURRENTE.map((valor) => (
-                    <option key={valor} value={valor}>
-                      {ETIQUETA_FRECUENCIA[valor]}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Campo>
+            {/* Un gasto fijo es mensual por definición: no se pregunta.
+                Si se edita uno con otra frecuencia, el campo sigue visible. */}
+            {soloGastosFijos && formulario.frecuencia === 'mensual' ? null : (
+              <Campo etiqueta="Frecuencia">
+                {(props) => (
+                  <select
+                    {...props}
+                    className="control"
+                    value={formulario.frecuencia}
+                    onChange={(e) =>
+                      setFormulario({
+                        ...formulario,
+                        frecuencia: e.target.value as FrecuenciaRecurrente,
+                      })
+                    }
+                  >
+                    {FRECUENCIAS_RECURRENTE.map((valor) => (
+                      <option key={valor} value={valor}>
+                        {ETIQUETA_FRECUENCIA[valor]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Campo>
+            )}
 
             {esMensual ? (
               <>
                 <div className="campo">
-                  <span className="campo__etiqueta">Vencimiento mensual</span>
+                  <span className="campo__etiqueta">Vencimiento</span>
                   <Segmentos
                     opciones={OPCIONES_DIA}
                     valor={formulario.modoDia}
-                    onCambio={(modoDia) => setFormulario({ ...formulario, modoDia })}
+                    onCambio={(modoDia) =>
+                      setFormulario({
+                        ...formulario,
+                        modoDia,
+                        // En un gasto fijo nuevo la próxima fecha sigue al día elegido.
+                        proximaFecha: nuevaProximaFecha(modoDia, formulario.diaMes),
+                      })
+                    }
                     etiquetaAccesible="Vencimiento mensual"
                   />
                 </div>
@@ -486,7 +653,13 @@ export function RecurrentesPage() {
                         max={31}
                         placeholder="10"
                         value={formulario.diaMes}
-                        onChange={(e) => setFormulario({ ...formulario, diaMes: e.target.value })}
+                        onChange={(e) =>
+                          setFormulario({
+                            ...formulario,
+                            diaMes: e.target.value,
+                            proximaFecha: nuevaProximaFecha(formulario.modoDia, e.target.value),
+                          })
+                        }
                       />
                     )}
                   </Campo>
@@ -494,7 +667,15 @@ export function RecurrentesPage() {
               </>
             ) : null}
 
-            <Campo etiqueta="Próxima fecha" error={errores.proximaFecha}>
+            <Campo
+              etiqueta={soloGastosFijos ? 'Próximo pago' : 'Próxima fecha'}
+              error={errores.proximaFecha}
+              ayuda={
+                soloGastosFijos
+                  ? 'Se calcula con el día de vencimiento; puedes ajustarlo.'
+                  : undefined
+              }
+            >
               {(props) => (
                 <input
                   {...props}
@@ -530,7 +711,7 @@ export function RecurrentesPage() {
             />
 
             <Interruptor
-              etiqueta="Recurrente activo"
+              etiqueta={soloGastosFijos ? 'Gasto fijo activo' : 'Recurrente activo'}
               activo={formulario.activa}
               onCambio={(activa) => setFormulario({ ...formulario, activa })}
             />
@@ -548,6 +729,25 @@ export function RecurrentesPage() {
                 Guardar
               </Boton>
             </div>
+
+            {/* Cancelar no borra nada: solo pone `activa = false`. */}
+            {soloGastosFijos && formulario.id ? (
+              <Boton
+                variante={formulario.activa ? 'peligro' : 'secundario'}
+                bloque
+                icono={<Ban size={16} aria-hidden="true" />}
+                disabled={guardando}
+                onClick={() => {
+                  const actual = recurrentes.find((r) => r.id === formulario.id)
+                  if (actual) {
+                    setFormulario(null)
+                    setConfirmandoEstado(actual)
+                  }
+                }}
+              >
+                {formulario.activa ? 'Cancelar gasto fijo' : 'Reactivar gasto fijo'}
+              </Boton>
+            ) : null}
           </form>
         ) : null}
       </Hoja>
@@ -556,6 +756,23 @@ export function RecurrentesPage() {
         previsto={previsto}
         onCerrar={() => setPrevisto(null)}
         onConfirmado={() => setVersion((v) => v + 1)}
+      />
+
+      <Dialogo
+        abierto={confirmandoEstado !== null}
+        titulo={
+          confirmandoEstado?.activa ? '¿Cancelar este gasto fijo?' : '¿Reactivar este gasto fijo?'
+        }
+        mensaje={
+          confirmandoEstado?.activa
+            ? 'Este gasto dejará de aparecer en tus próximos pagos. Los pagos anteriores se conservarán.'
+            : 'Volverá a aparecer en tus próximos pagos a partir de su próxima fecha.'
+        }
+        textoConfirmar={confirmandoEstado?.activa ? 'Cancelar gasto fijo' : 'Reactivar'}
+        peligroso={confirmandoEstado?.activa ?? false}
+        procesando={cambiandoEstado}
+        onConfirmar={alternarEstado}
+        onCancelar={() => setConfirmandoEstado(null)}
       />
     </>
   )

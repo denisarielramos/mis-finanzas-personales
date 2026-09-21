@@ -552,6 +552,27 @@
   padding: 0 var(--espacio-3) 0 0;
 }
 
+/* Con una acción de texto largo, en móvil el botón baja a su propia línea
+   para que el contenido de la fila no quede recortado. */
+@media (max-width: 520px) {
+  .fila-con-accion--apilada {
+    flex-wrap: wrap;
+  }
+
+  .fila-con-accion--apilada .lista__item {
+    flex: 1 0 100%;
+  }
+
+  .fila-con-accion--apilada .fila-con-accion__accion {
+    width: 100%;
+    padding: 0 var(--espacio-4) var(--espacio-3);
+  }
+
+  .fila-con-accion--apilada .fila-con-accion__accion .boton {
+    width: 100%;
+  }
+}
+
 /* Tarjeta de plan de cuotas */
 .plan {
   padding: var(--espacio-4);

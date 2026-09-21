@@ -1,5 +1,14 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, CreditCard, Link2, Repeat, Settings, Tags, Target } from 'lucide-react'
+import {
+  ChevronRight,
+  CreditCard,
+  Link2,
+  ReceiptText,
+  Repeat,
+  Settings,
+  Tags,
+  Target,
+} from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { useAuth } from '../hooks/useAuth'
 
@@ -17,9 +26,15 @@ const OPCIONES = [
     Icono: Target,
   },
   {
+    ruta: '/gastos-fijos',
+    titulo: 'Gastos fijos',
+    detalle: 'Pagos mensuales hasta que los canceles',
+    Icono: ReceiptText,
+  },
+  {
     ruta: '/recurrentes',
     titulo: 'Recurrentes',
-    detalle: 'Ingresos y gastos previstos que se repiten',
+    detalle: 'Todos los ingresos y gastos previstos',
     Icono: Repeat,
   },
   {
