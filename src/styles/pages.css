@@ -595,7 +595,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--espacio-3);
+  flex-wrap: wrap;
+  gap: 4px var(--espacio-3);
   margin-top: var(--espacio-2);
   font-size: 0.8125rem;
   color: var(--texto-suave);

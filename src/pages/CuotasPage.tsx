@@ -44,6 +44,11 @@ export function CuotasPage() {
     const pct = porcentaje(plan.cuotas_pagadas, plan.cantidad_cuotas)
     const proxima = proximas?.get(plan.id)
     const fechaProxima = proxima?.fecha_vencimiento ?? plan.proxima_cuota
+    // Monto de cada cuota: el de la próxima pendiente o, si no queda ninguna,
+    // el que resulta de repartir el total entre las cuotas del plan.
+    const montoCuota =
+      proxima?.monto_programado ??
+      (plan.cantidad_cuotas > 0 ? Math.round(plan.monto_total / plan.cantidad_cuotas) : 0)
 
     return (
       <button
@@ -61,13 +66,17 @@ export function CuotasPage() {
           <span
             className={`etiqueta ${plan.estado === 'activo' ? 'etiqueta--info' : ''}`}
           >
-            {plan.cuotas_pagadas} de {plan.cantidad_cuotas}
+            {plan.estado === 'activo'
+              ? `${plan.cuotas_pendientes} pendientes`
+              : ETIQUETA_ESTADO_PLAN[plan.estado]}
           </span>
         </div>
 
         <div className="plan__cifras">
-          <span className="plan__pendiente numero">{formatearGs(plan.saldo_pendiente)}</span>
-          <span className="texto-suave numero">de {formatearGs(plan.monto_total)}</span>
+          <span className="plan__pendiente numero">Cuota: {formatearGs(montoCuota)}</span>
+          <span className="texto-suave numero">
+            {plan.cuotas_pagadas} de {plan.cantidad_cuotas} pagadas
+          </span>
         </div>
 
         <div className="progreso">
@@ -83,16 +92,11 @@ export function CuotasPage() {
         </div>
 
         <div className="plan__pie">
+          <span className="numero">Pendiente: {formatearGs(plan.saldo_pendiente)}</span>
           <span>
             {plan.estado === 'activo' && fechaProxima ? (
               <>
                 Próxima: <span className="numero">{formatearFecha(fechaProxima)}</span>
-                {proxima ? (
-                  <>
-                    {' — '}
-                    <span className="numero">{formatearGs(proxima.monto_programado)}</span>
-                  </>
-                ) : null}
               </>
             ) : (
               ETIQUETA_ESTADO_PLAN[plan.estado]

@@ -58,6 +58,17 @@ export function PlanDetallePage() {
   const cuotas = useMemo(() => datos?.cuotas ?? [], [datos])
   const hoy = hoyISO()
 
+  /** Monto de cada cuota: el de la primera pendiente o el reparto del total. */
+  const montoCuota = useMemo(() => {
+    const pendiente = cuotas.find((c) => c.estado === 'pendiente')
+    if (pendiente) return pendiente.monto_programado
+    if (cuotas.length > 0) return cuotas[0].monto_programado
+    if (resumen && resumen.cantidad_cuotas > 0) {
+      return Math.round(resumen.monto_total / resumen.cantidad_cuotas)
+    }
+    return 0
+  }, [cuotas, resumen])
+
   const pct = resumen ? porcentaje(resumen.cuotas_pagadas, resumen.cantidad_cuotas) : 0
 
   function refrescar() {
@@ -135,10 +146,10 @@ export function PlanDetallePage() {
               </div>
 
               <div className="plan__cifras">
-                <span className="plan__pendiente numero">
-                  {formatearGs(resumen.saldo_pendiente)}
+                <span className="plan__pendiente numero">Cuota: {formatearGs(montoCuota)}</span>
+                <span className="texto-suave numero">
+                  {resumen.cuotas_pagadas} de {resumen.cantidad_cuotas} pagadas
                 </span>
-                <span className="texto-suave numero">de {formatearGs(resumen.monto_total)}</span>
               </div>
 
               <div className="progreso">
@@ -154,8 +165,8 @@ export function PlanDetallePage() {
               </div>
 
               <div className="plan__pie">
-                <span>
-                  {resumen.cuotas_pagadas} de {resumen.cantidad_cuotas} cuotas pagadas
+                <span className="numero">
+                  Pendiente: {formatearGs(resumen.saldo_pendiente)}
                 </span>
                 <span className="numero">{pct}%</span>
               </div>
@@ -164,8 +175,19 @@ export function PlanDetallePage() {
             <div className="tarjeta" style={{ marginTop: 12 }}>
               <div className="datos">
                 <div className="datos__fila">
+                  <span className="datos__clave">Monto de cuota</span>
+                  <span className="datos__valor numero">{formatearGs(montoCuota)}</span>
+                </div>
+                <div className="datos__fila">
+                  <span className="datos__clave">Cuotas</span>
+                  <span className="datos__valor numero">{resumen.cantidad_cuotas}</span>
+                </div>
+                <div className="datos__fila">
                   <span className="datos__clave">Pagado</span>
-                  <span className="datos__valor numero">{formatearGs(resumen.monto_pagado)}</span>
+                  <span className="datos__valor numero">
+                    {formatearGs(resumen.monto_pagado)} · {resumen.cuotas_pagadas}{' '}
+                    {resumen.cuotas_pagadas === 1 ? 'cuota' : 'cuotas'}
+                  </span>
                 </div>
                 <div className="datos__fila">
                   <span className="datos__clave">Pendiente</span>

@@ -38,7 +38,8 @@ export function PlanCuotasFormPage() {
 
   const [proveedor, setProveedor] = useState('')
   const [nombre, setNombre] = useState('')
-  const [montoTotal, setMontoTotal] = useState('')
+  // Se pide el monto de CADA cuota; el total se deduce, nunca se escribe.
+  const [montoCuota, setMontoCuota] = useState('')
   const [cantidadCuotas, setCantidadCuotas] = useState('12')
   const [fechaCompra, setFechaCompra] = useState(hoyISO)
   const [modoPrimera, setModoPrimera] = useState<ModoPrimera>('fecha')
@@ -60,8 +61,17 @@ export function PlanCuotasFormPage() {
 
   const cantidad = Number.parseInt(cantidadCuotas, 10)
   const frecuencia = Number.parseInt(frecuenciaMeses, 10)
-  const total = parsearEntradaMonto(montoTotal)
+  const cuota = parsearEntradaMonto(montoCuota)
   const dias = Number.parseInt(diasPrimera, 10)
+
+  /**
+   * Total comprometido = monto de la cuota × cantidad de cuotas.
+   * Es informativo para quien usa la aplicación, pero es lo que espera el RPC
+   * en `p_monto_total`. Al ser múltiplo exacto, la base genera todas las
+   * cuotas con el mismo importe.
+   */
+  const totalComprometido =
+    cuota > 0 && Number.isFinite(cantidad) && cantidad > 0 ? cuota * cantidad : 0
 
   /** Fecha de la primera cuota, se escriba directamente o se calcule por días. */
   const primeraEfectiva = useMemo(() => {
@@ -71,14 +81,14 @@ export function PlanCuotasFormPage() {
   }, [modoPrimera, fechaPrimera, fechaCompra, dias])
 
   const previsualizacion = useMemo(() => {
-    if (!total || !Number.isFinite(cantidad) || cantidad < 1 || !primeraEfectiva) return null
+    if (!totalComprometido || !primeraEfectiva) return null
     const pasos = Number.isFinite(frecuencia) && frecuencia > 0 ? frecuencia : 1
     return {
-      porCuota: Math.round(total / cantidad),
       primera: primeraEfectiva,
       ultima: sumarMeses(primeraEfectiva, (cantidad - 1) * pasos),
+      mensual: pasos === 1,
     }
-  }, [total, cantidad, frecuencia, primeraEfectiva])
+  }, [totalComprometido, cantidad, frecuencia, primeraEfectiva])
 
   async function alEnviar(e: FormEvent) {
     e.preventDefault()
@@ -91,7 +101,7 @@ export function PlanCuotasFormPage() {
 
     const nuevos: Record<string, string> = {}
     if (!nombre.trim()) nuevos.nombre = 'Escribe el nombre de la compra.'
-    if (total <= 0) nuevos.monto = 'Escribe un monto mayor que cero.'
+    if (cuota <= 0) nuevos.monto = 'Escribe el monto de la cuota.'
     if (!Number.isFinite(cantidad) || cantidad < 1) {
       nuevos.cantidad = 'Indica cuántas cuotas son.'
     }
@@ -108,7 +118,8 @@ export function PlanCuotasFormPage() {
     try {
       const resultado = await crearPlanCuotas({
         nombre,
-        montoTotal: total,
+        // El RPC sigue recibiendo el total: monto de la cuota × cantidad.
+        montoTotal: totalComprometido,
         cantidadCuotas: cantidad,
         fechaCompra,
         fechaPrimeraCuota: primeraEfectiva,
@@ -173,8 +184,12 @@ export function PlanCuotasFormPage() {
             )}
           </Campo>
 
-          <Campo etiqueta="Monto total financiado" error={errores.monto}>
-            {(props) => <InputMonto {...props} valor={montoTotal} onChange={setMontoTotal} />}
+          <Campo
+            etiqueta="Monto de cada cuota"
+            error={errores.monto}
+            ayuda="El total comprometido se calcula solo."
+          >
+            {(props) => <InputMonto {...props} valor={montoCuota} onChange={setMontoCuota} />}
           </Campo>
 
           <div className="fila-doble">
@@ -340,19 +355,38 @@ export function PlanCuotasFormPage() {
               <p className="lista__titulo" style={{ whiteSpace: 'normal' }}>
                 {[proveedor.trim(), nombre.trim()].filter(Boolean).join(' · ') || 'Nueva compra'}
               </p>
-              <p className="texto-suave numero" style={{ fontSize: '0.875rem' }}>
-                Total {formatearGs(total)} · {cantidad}{' '}
-                {cantidad === 1 ? 'cuota' : 'cuotas'}
+
+              <p className="campo__etiqueta" style={{ marginTop: 10 }}>
+                {previsualizacion.mensual ? 'Cuota mensual' : 'Monto de cada cuota'}
               </p>
-              <p className="previsualizacion__cuota numero" style={{ marginTop: 8 }}>
-                ≈ {formatearGs(previsualizacion.porCuota)} por cuota
-              </p>
-              <p className="texto-suave numero" style={{ fontSize: '0.875rem', marginTop: 6 }}>
-                Primera: {formatearFecha(previsualizacion.primera)} · Última:{' '}
-                {formatearFecha(previsualizacion.ultima)}
-              </p>
+              <p className="previsualizacion__cuota numero">{formatearGs(cuota)}</p>
+
+              <div className="datos" style={{ marginTop: 10 }}>
+                <div className="datos__fila">
+                  <span className="datos__clave">Cuotas</span>
+                  <span className="datos__valor numero">{cantidad}</span>
+                </div>
+                <div className="datos__fila">
+                  <span className="datos__clave">Total comprometido</span>
+                  <span className="datos__valor numero">{formatearGs(totalComprometido)}</span>
+                </div>
+                <div className="datos__fila">
+                  <span className="datos__clave">Primera cuota</span>
+                  <span className="datos__valor numero">
+                    {formatearFecha(previsualizacion.primera)}
+                  </span>
+                </div>
+                <div className="datos__fila">
+                  <span className="datos__clave">Última cuota</span>
+                  <span className="datos__valor numero">
+                    {formatearFecha(previsualizacion.ultima)}
+                  </span>
+                </div>
+              </div>
+
               <p className="campo__ayuda" style={{ marginTop: 8 }}>
-                Es una estimación: las cuotas definitivas las genera la base de datos.
+                El total es informativo: se calcula como cuota × cantidad. Las cuotas
+                definitivas las genera la base de datos.
               </p>
             </div>
           ) : null}
