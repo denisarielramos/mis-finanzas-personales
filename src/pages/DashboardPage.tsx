@@ -14,7 +14,7 @@ import { calcularPatrimonio } from '../services/accountsService'
 import { listarMovimientos, resumenPeriodo } from '../services/movementsService'
 import { listarProximosMovimientos, resumirPlanificacion } from '../services/upcomingService'
 import { agruparOperaciones } from '../utils/movimientos'
-import { capitalizar, hoyISO, mesActual, sumarDias } from '../utils/date'
+import { capitalizar, mesActual } from '../utils/date'
 import { formatearGs } from '../utils/money'
 
 // El gráfico arrastra la librería de charts: se carga aparte para que la
@@ -55,10 +55,10 @@ export function DashboardPage() {
     'No se pudo calcular la planificación del mes.',
   )
 
-  // Próximos cobros y pagos: siempre desde hoy, incluidos los vencidos.
+  // Próximos cobros y pagos del mes seleccionado, incluidos los vencidos.
   const proximos = useCarga(
-    () => listarProximosMovimientos({ hasta: sumarDias(hoyISO(), 60), limite: 8 }),
-    [version],
+    () => listarProximosMovimientos({ desde: mes.desde, hasta: mes.hasta, limite: 50 }),
+    [mes.desde, mes.hasta, version],
     'No se pudieron cargar los próximos movimientos.',
   )
 
