@@ -48,18 +48,15 @@ export function DashboardPage() {
     'No se pudieron cargar los últimos movimientos.',
   )
 
-  // Previsiones del mes seleccionado (para los totales de planificación).
+  /**
+   * Previsiones del mes seleccionado: una sola carga que alimenta tanto los
+   * totales de Planificación como la lista de movimientos previstos.
+   * `version` se incrementa al confirmar, así ambas secciones se refrescan.
+   */
   const previstoMes = useCarga(
-    () => listarProximosMovimientos({ desde: mes.desde, hasta: mes.hasta }),
-    [mes.desde, mes.hasta, version],
-    'No se pudo calcular la planificación del mes.',
-  )
-
-  // Próximos cobros y pagos del mes seleccionado, incluidos los vencidos.
-  const proximos = useCarga(
     () => listarProximosMovimientos({ desde: mes.desde, hasta: mes.hasta, limite: 50 }),
     [mes.desde, mes.hasta, version],
-    'No se pudieron cargar los próximos movimientos.',
+    'No se pudieron cargar los movimientos previstos del mes.',
   )
 
   const patrimonio = useMemo(() => calcularPatrimonio(saldos), [saldos])
@@ -94,7 +91,8 @@ export function DashboardPage() {
       <Encabezado titulo="Mis Finanzas" subtitulo={capitalizar(mes.etiqueta)} ancho />
 
       <div className="contenedor contenedor--ancho">
-        <SelectorMes rango={mes} onCambio={setMes} />
+        {/* Se permite avanzar a meses futuros para revisar la planificación. */}
+        <SelectorMes rango={mes} onCambio={setMes} limitarFuturo={false} />
 
         {errorCatalogo ? (
           <div style={{ marginTop: 16 }}>
@@ -215,18 +213,21 @@ export function DashboardPage() {
           {previstoMes.error ? <Mensaje tipo="error">{previstoMes.error}</Mensaje> : null}
         </section>
 
-        <section className="seccion" aria-label="Próximos movimientos">
-          <div className="seccion__cabecera">
-            <h2 className="seccion__titulo">Próximos movimientos</h2>
-            <span className="campo__ayuda">
-              <CalendarClock size={13} aria-hidden="true" /> Cobros y pagos previstos
-            </span>
+        <section className="seccion" aria-label="Movimientos previstos del mes">
+          <div className="seccion__cabecera" style={{ marginBottom: 4 }}>
+            <h2 className="seccion__titulo">Movimientos previstos del mes</h2>
           </div>
+          <p
+            className="campo__ayuda"
+            style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}
+          >
+            <CalendarClock size={13} aria-hidden="true" /> Cobros y pagos previstos
+          </p>
 
           <ProximosMovimientos
-            proximos={proximos.datos ?? []}
-            cargando={proximos.cargando}
-            error={proximos.error}
+            proximos={previstoMes.datos ?? []}
+            cargando={previstoMes.cargando}
+            error={previstoMes.error}
             onCambio={() => setVersion((v) => v + 1)}
           />
         </section>
