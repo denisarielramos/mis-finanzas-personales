@@ -1,10 +1,10 @@
 import { supabase } from '../lib/supabase'
 import { lanzarSiError } from '../lib/errors'
 import { aMonto } from '../utils/money'
-import type { Categoria, FechaISO, MontoPYG, Presupuesto, UUID } from '../types/db'
+import type { Categoria, FechaISO, MontoPYG, Movimiento, Presupuesto, UUID } from '../types/db'
 import { idUsuarioActual } from './authService'
 import { idsConDescendientes } from './categoriesService'
-import { gastoPorCategorias } from './movementsService'
+import { gastoPorCategorias, listarMovimientos } from './movementsService'
 
 /**
  * Presupuestos (`public.presupuestos`).
@@ -32,6 +32,17 @@ export async function listarPresupuestos(soloActivos = false): Promise<Presupues
   const { data, error } = await consulta
   lanzarSiError(error, 'No se pudieron cargar los presupuestos.')
   return (data ?? []).map(normalizar)
+}
+
+export async function obtenerPresupuesto(id: UUID): Promise<Presupuesto | null> {
+  const { data, error } = await supabase
+    .from('presupuestos')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+
+  lanzarSiError(error, 'No se pudo cargar el presupuesto.')
+  return data ? normalizar(data as Record<string, unknown>) : null
 }
 
 export interface DatosPresupuesto {
@@ -123,4 +134,48 @@ export async function calcularConsumos(
   )
 
   return consumos
+}
+
+export interface DetallePresupuesto {
+  presupuesto: Presupuesto
+  /** Categoría del presupuesto y todas sus descendientes. */
+  categoriaIds: UUID[]
+  /** Gastos reales que consumen el presupuesto, de más reciente a más antiguo. */
+  movimientos: Movimiento[]
+  /** Suma de esos gastos; coincide con lo que devuelve `calcularConsumos`. */
+  gastado: MontoPYG
+}
+
+/**
+ * Detalle de un presupuesto con los gastos que lo consumen.
+ *
+ * Aplica exactamente las mismas reglas que `calcularConsumos`, reutilizando
+ * `listarMovimientos` e `idsConDescendientes`: `tipo = gasto`,
+ * `estado = confirmado`, dentro del rango y en la categoría del presupuesto
+ * o en alguna de sus subcategorías. Quedan fuera transferencias, ingresos y
+ * movimientos anulados; las cuotas y los recurrentes pendientes ni siquiera
+ * existen en `public.movimientos`.
+ */
+export async function obtenerDetallePresupuesto(
+  id: UUID,
+  categorias: Categoria[],
+): Promise<DetallePresupuesto | null> {
+  const presupuesto = await obtenerPresupuesto(id)
+  if (!presupuesto) return null
+
+  const categoriaIds = idsConDescendientes(categorias, presupuesto.categoria_id)
+  const permitidas = new Set(categoriaIds)
+
+  const gastos = await listarMovimientos({
+    desde: presupuesto.fecha_desde,
+    hasta: presupuesto.fecha_hasta,
+    filtro: 'gastos',
+    estados: ['confirmado'],
+    limite: 1000,
+  })
+
+  const movimientos = gastos.filter((m) => m.categoria_id && permitidas.has(m.categoria_id))
+  const gastado = movimientos.reduce((total, m) => total + m.monto, 0)
+
+  return { presupuesto, categoriaIds, movimientos, gastado }
 }

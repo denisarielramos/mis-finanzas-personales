@@ -28,6 +28,9 @@ const PresupuestosPage = lazy(() =>
 const RecurrentesPage = lazy(() =>
   import('./pages/RecurrentesPage').then((m) => ({ default: m.RecurrentesPage })),
 )
+const PresupuestoDetallePage = lazy(() =>
+  import('./pages/PresupuestoDetallePage').then((m) => ({ default: m.PresupuestoDetallePage })),
+)
 const ConciliacionPage = lazy(() =>
   import('./pages/ConciliacionPage').then((m) => ({ default: m.ConciliacionPage })),
 )
@@ -105,6 +108,7 @@ export function App() {
             <Route path="/mas" element={<MasPage />} />
             <Route path="/categorias" element={<CategoriasPage />} />
             <Route path="/presupuestos" element={<PresupuestosPage />} />
+            <Route path="/presupuestos/:id" element={<PresupuestoDetallePage />} />
             <Route path="/recurrentes" element={<RecurrentesPage />} />
             <Route path="/gastos-fijos" element={<RecurrentesPage enfoque="gastos-fijos" />} />
             <Route path="/conciliacion" element={<ConciliacionPage />} />

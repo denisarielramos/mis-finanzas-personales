@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Target } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
@@ -51,6 +52,8 @@ function formularioVacio(): EstadoFormulario {
 export function PresupuestosPage() {
   const { categorias, categoriaPorId } = useCatalogo()
   const avisos = useAvisos()
+  const navegar = useNavigate()
+  const [parametros, setParametros] = useSearchParams()
 
   const [formulario, setFormulario] = useState<EstadoFormulario | null>(null)
   const [guardando, setGuardando] = useState(false)
@@ -91,6 +94,20 @@ export function PresupuestosPage() {
       activo: presupuesto.activo,
     })
   }
+
+  /**
+   * El detalle pide editar con `?editar=<id>`: así el formulario sigue
+   * viviendo en un único sitio en lugar de duplicarse.
+   */
+  const aEditar = parametros.get('editar')
+  useEffect(() => {
+    if (!aEditar || presupuestos.length === 0) return
+    const presupuesto = presupuestos.find((p) => p.id === aEditar)
+    if (presupuesto) abrirEdicion(presupuesto)
+    parametros.delete('editar')
+    setParametros(parametros, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aEditar, presupuestos])
 
   async function guardar(e: FormEvent) {
     e.preventDefault()
@@ -183,7 +200,7 @@ export function PresupuestosPage() {
                   type="button"
                   className="tarjeta tarjeta--pulsable presupuesto"
                   style={{ opacity: presupuesto.activo ? 1 : 0.6 }}
-                  onClick={() => abrirEdicion(presupuesto)}
+                  onClick={() => navegar(`/presupuestos/${presupuesto.id}`)}
                 >
                   <div className="presupuesto__cabecera">
                     <div>
