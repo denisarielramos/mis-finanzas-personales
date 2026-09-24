@@ -20,8 +20,9 @@ import {
 import { categoriaAdmite } from '../services/categoriesService'
 import type { Presupuesto, UUID } from '../types/db'
 import { formatearFecha, mesActual } from '../utils/date'
-import { formatearGs, parsearEntradaMonto, porcentaje } from '../utils/money'
+import { parsearEntradaMonto, porcentaje } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 interface EstadoFormulario {
   id: UUID | null
@@ -50,6 +51,7 @@ function formularioVacio(): EstadoFormulario {
  * dentro del rango; las transferencias nunca consumen presupuesto.
  */
 export function PresupuestosPage() {
+  const { monto } = usePrivacidad()
   const { categorias, categoriaPorId } = useCatalogo()
   const avisos = useAvisos()
   const navegar = useNavigate()
@@ -220,8 +222,8 @@ export function PresupuestosPage() {
                   </div>
 
                   <div className="presupuesto__cifras">
-                    <span className="presupuesto__gastado numero">{formatearGs(gastado)}</span>
-                    <span className="texto-suave numero">de {formatearGs(limite)}</span>
+                    <span className="presupuesto__gastado numero">{monto(gastado)}</span>
+                    <span className="texto-suave numero">de {monto(limite)}</span>
                   </div>
 
                   <div className="progreso">
@@ -239,7 +241,7 @@ export function PresupuestosPage() {
                   <div className="presupuesto__pie">
                     <span className={disponible < 0 ? 'texto-negativo' : ''}>
                       {disponible < 0 ? 'Excedido en ' : 'Disponible: '}
-                      <span className="numero">{formatearGs(Math.abs(disponible))}</span>
+                      <span className="numero">{monto(Math.abs(disponible))}</span>
                     </span>
                     {!presupuesto.activo ? <span className="etiqueta">Desactivado</span> : null}
                   </div>

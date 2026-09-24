@@ -19,8 +19,9 @@ import {
 } from '../services/installmentsService'
 import { ETIQUETA_ESTADO_PLAN, type CuotaPlan } from '../types/db'
 import { formatearFecha, hoyISO } from '../utils/date'
-import { formatearGs, porcentaje } from '../utils/money'
+import { porcentaje } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /**
  * Detalle de un plan de cuotas.
@@ -29,6 +30,7 @@ import { textoDeExcepcion } from '../lib/errors'
  * pendiente): nunca se modifica el estado guardado en la base.
  */
 export function PlanDetallePage() {
+  const { monto } = usePrivacidad()
   const { id = '' } = useParams()
   const avisos = useAvisos()
   const { categoriaPorId, cuentaPorId, refrescarSaldos } = useCatalogo()
@@ -146,7 +148,7 @@ export function PlanDetallePage() {
               </div>
 
               <div className="plan__cifras">
-                <span className="plan__pendiente numero">Cuota: {formatearGs(montoCuota)}</span>
+                <span className="plan__pendiente numero">Cuota: {monto(montoCuota)}</span>
                 <span className="texto-suave numero">
                   {resumen.cuotas_pagadas} de {resumen.cantidad_cuotas} pagadas
                 </span>
@@ -166,7 +168,7 @@ export function PlanDetallePage() {
 
               <div className="plan__pie">
                 <span className="numero">
-                  Pendiente: {formatearGs(resumen.saldo_pendiente)}
+                  Pendiente: {monto(resumen.saldo_pendiente)}
                 </span>
                 <span className="numero">{pct}%</span>
               </div>
@@ -176,7 +178,7 @@ export function PlanDetallePage() {
               <div className="datos">
                 <div className="datos__fila">
                   <span className="datos__clave">Monto de cuota</span>
-                  <span className="datos__valor numero">{formatearGs(montoCuota)}</span>
+                  <span className="datos__valor numero">{monto(montoCuota)}</span>
                 </div>
                 <div className="datos__fila">
                   <span className="datos__clave">Cuotas</span>
@@ -185,14 +187,14 @@ export function PlanDetallePage() {
                 <div className="datos__fila">
                   <span className="datos__clave">Pagado</span>
                   <span className="datos__valor numero">
-                    {formatearGs(resumen.monto_pagado)} · {resumen.cuotas_pagadas}{' '}
+                    {monto(resumen.monto_pagado)} · {resumen.cuotas_pagadas}{' '}
                     {resumen.cuotas_pagadas === 1 ? 'cuota' : 'cuotas'}
                   </span>
                 </div>
                 <div className="datos__fila">
                   <span className="datos__clave">Pendiente</span>
                   <span className="datos__valor numero">
-                    {formatearGs(resumen.saldo_pendiente)}
+                    {monto(resumen.saldo_pendiente)}
                   </span>
                 </div>
                 <div className="datos__fila">
@@ -268,7 +270,7 @@ export function PlanDetallePage() {
                             ) : null}
                           </span>
                         </span>
-                        <span className="lista__monto numero">{formatearGs(montoMostrado)}</span>
+                        <span className="lista__monto numero">{monto(montoMostrado)}</span>
                       </div>
 
                       {cuota.estado === 'pendiente' ? (

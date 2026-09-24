@@ -11,12 +11,13 @@ import { useAvisos } from '../hooks/useToast'
 import { anularMovimiento, obtenerMovimiento } from '../services/movementsService'
 import { ETIQUETA_ESTADO_MOVIMIENTO, ETIQUETA_TIPO_MOVIMIENTO } from '../types/db'
 import { formatearFecha, formatearFechaHora } from '../utils/date'
-import { formatearGs } from '../utils/money'
 import { esEditableComoMovimiento, signoDeMovimiento } from '../utils/movimientos'
 import { textoDeExcepcion } from '../lib/errors'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /** Detalle de un movimiento suelto (ingreso, gasto, ajuste o devolución). */
 export function MovimientoDetallePage() {
+  const { monto } = usePrivacidad()
   const { id = '' } = useParams()
   const navegar = useNavigate()
   const avisos = useAvisos()
@@ -78,7 +79,7 @@ export function MovimientoDetallePage() {
                 <p
                   className={`detalle__valor numero ${signo === 'positivo' ? 'texto-positivo' : signo === 'negativo' ? 'texto-negativo' : ''}`}
                 >
-                  {formatearGs(signo === 'negativo' ? -movimiento.monto : movimiento.monto, {
+                  {monto(signo === 'negativo' ? -movimiento.monto : movimiento.monto, {
                     signo: signo === 'positivo' ? 'siempre' : 'auto',
                   })}
                 </p>

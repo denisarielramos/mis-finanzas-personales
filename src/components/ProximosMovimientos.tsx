@@ -4,8 +4,8 @@ import { EsqueletoLista, EstadoVacio, Mensaje } from './ui/Estados'
 import { HojaConfirmarRecurrente, type PrevistoRecurrente } from './HojaConfirmarRecurrente'
 import { HojaPagarCuota, type CuotaPorPagar } from './HojaPagarCuota'
 import type { ProximoMovimiento } from '../types/db'
-import { formatearGs } from '../utils/money'
 import { partesFecha } from '../utils/date'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 const MESES_CORTOS = [
   'ene',
@@ -38,6 +38,7 @@ interface Props {
  * crea el movimiento real mediante el RPC.
  */
 export function ProximosMovimientos({ proximos, cargando, error, onCambio }: Props) {
+  const { monto } = usePrivacidad()
   const [previsto, setPrevisto] = useState<PrevistoRecurrente | null>(null)
   const [cuota, setCuota] = useState<CuotaPorPagar | null>(null)
 
@@ -117,7 +118,7 @@ export function ProximosMovimientos({ proximos, cargando, error, onCambio }: Pro
                 <span
                   className={`lista__monto numero ${esIngreso ? 'texto-positivo' : 'texto-negativo'}`}
                 >
-                  {formatearGs(esIngreso ? proximo.monto : -proximo.monto, {
+                  {monto(esIngreso ? proximo.monto : -proximo.monto, {
                     signo: esIngreso ? 'siempre' : 'auto',
                   })}
                 </span>

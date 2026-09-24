@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { Categoria, MontoPYG, UUID } from '../types/db'
-import { formatearGs, formatearGsCorto, porcentaje } from '../utils/money'
+import { porcentaje } from '../utils/money'
 import { SIN_CATEGORIA } from '../services/movementsService'
 import { useTemaOscuro } from '../hooks/useTemaOscuro'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /**
  * Gasto del mes por categoría.
@@ -42,6 +43,7 @@ function acortar(texto: string, maximo = 14): string {
 
 export function GraficoGastos({ gastoPorCategoria, categorias, total }: Props) {
   const oscuro = useTemaOscuro()
+  const { monto: formatearMonto, montoCorto } = usePrivacidad()
   const rampa = oscuro ? RAMPA_OSCURO : RAMPA_CLARO
   const colorTexto = oscuro ? '#a3aebf' : '#5b6676'
 
@@ -109,7 +111,7 @@ export function GraficoGastos({ gastoPorCategoria, categorias, total }: Props) {
                   <div className="tarjeta tarjeta--relleno" style={{ padding: 10 }}>
                     <div style={{ fontWeight: 650, fontSize: 13 }}>{dato.nombre}</div>
                     <div className="numero" style={{ fontSize: 13 }}>
-                      {formatearGs(dato.monto)} · {dato.porcentaje}%
+                      {formatearMonto(dato.monto)} · {dato.porcentaje}%
                     </div>
                   </div>
                 )
@@ -130,14 +132,14 @@ export function GraficoGastos({ gastoPorCategoria, categorias, total }: Props) {
           <li className="grafico__item" key={dato.clave}>
             <span className="grafico__punto" style={{ background: dato.color }} aria-hidden="true" />
             <span className="grafico__nombre">{dato.nombre}</span>
-            <span className="grafico__valor numero">{formatearGs(dato.monto)}</span>
+            <span className="grafico__valor numero">{formatearMonto(dato.monto)}</span>
             <span className="grafico__porcentaje numero">{dato.porcentaje}%</span>
           </li>
         ))}
       </ul>
 
       <p className="campo__ayuda" style={{ marginTop: 12, textAlign: 'right' }}>
-        Total gastado: <span className="numero">{formatearGsCorto(total)}</span>
+        Total gastado: <span className="numero">{montoCorto(total)}</span>
       </p>
     </div>
   )

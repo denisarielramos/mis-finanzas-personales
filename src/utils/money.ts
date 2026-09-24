@@ -59,6 +59,18 @@ export interface OpcionesFormato {
 }
 
 /**
+ * Signo que antecede al importe según las opciones de formato.
+ * Se usa tanto al mostrar el monto como al ocultarlo en modo privacidad.
+ */
+export function prefijoSigno(valor: unknown, opciones: OpcionesFormato = {}): string {
+  const monto = aMonto(valor)
+  const { signo = 'auto' } = opciones
+  if (signo === 'siempre') return monto < 0 ? '-' : '+'
+  if (signo === 'auto' && monto < 0) return '-'
+  return ''
+}
+
+/**
  * Formato oficial de importes de la aplicación.
  *
  *   formatearGs(150000)                     → 'Gs. 150.000'
@@ -66,15 +78,8 @@ export interface OpcionesFormato {
  *   formatearGs(9000000, { signo: 'siempre' }) → '+Gs. 9.000.000'
  */
 export function formatearGs(valor: unknown, opciones: OpcionesFormato = {}): string {
-  const monto = aMonto(valor)
-  const { signo = 'auto' } = opciones
-  const absoluto = agruparMiles(Math.abs(monto))
-
-  let prefijo = ''
-  if (signo === 'siempre') prefijo = monto < 0 ? '-' : '+'
-  else if (signo === 'auto' && monto < 0) prefijo = '-'
-
-  return `${prefijo}${SIMBOLO_MONEDA} ${absoluto}`
+  const absoluto = agruparMiles(Math.abs(aMonto(valor)))
+  return `${prefijoSigno(valor, opciones)}${SIMBOLO_MONEDA} ${absoluto}`
 }
 
 /** Versión abreviada para ejes y etiquetas de gráficos: `1,2 M`, `350 mil`. */

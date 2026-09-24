@@ -553,6 +553,20 @@ input[type='date'].control {
   font-weight: 550;
 }
 
+/* Solo el interruptor, sin etiqueta visible (filas de lista) */
+.interruptor--compacto {
+  gap: 0;
+  justify-content: flex-end;
+}
+
+.interruptor input:disabled {
+  cursor: wait;
+}
+
+.interruptor input:disabled + .interruptor__control {
+  opacity: 0.6;
+}
+
 .interruptor__control {
   position: relative;
   width: 51px;

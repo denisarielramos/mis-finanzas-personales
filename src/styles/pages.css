@@ -552,6 +552,12 @@
   padding: 0 var(--espacio-3) 0 0;
 }
 
+/* Cuando la acción es un interruptor estrecho, el detalle puede ocupar dos
+   líneas en vez de recortarse («Ahorro · Fuera del patrimonio»). */
+.fila-con-accion--compacta .lista__detalle {
+  white-space: normal;
+}
+
 /* Con una acción de texto largo, en móvil el botón baja a su propia línea
    para que el contenido de la fila no quede recortado. */
 @media (max-width: 520px) {

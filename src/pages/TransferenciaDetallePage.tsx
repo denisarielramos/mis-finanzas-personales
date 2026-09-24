@@ -12,14 +12,15 @@ import { anularTransferencia, obtenerTransferencia } from '../services/transfers
 import { listarMovimientosDeTransferencia } from '../services/movementsService'
 import { ETIQUETA_ESTADO_TRANSFERENCIA } from '../types/db'
 import { formatearFecha, formatearFechaHora } from '../utils/date'
-import { formatearGs } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /**
  * Detalle de una transferencia completa.
  * Nunca se muestra ni se edita una sola mitad: la operación es una sola.
  */
 export function TransferenciaDetallePage() {
+  const { monto: formatearMonto } = usePrivacidad()
   const { id = '' } = useParams()
   const navegar = useNavigate()
   const avisos = useAvisos()
@@ -91,7 +92,7 @@ export function TransferenciaDetallePage() {
             <div className="tarjeta">
               <div className="detalle__monto">
                 <span className="etiqueta etiqueta--info">Entre cuentas propias</span>
-                <p className="detalle__valor numero">{formatearGs(monto, { signo: 'nunca' })}</p>
+                <p className="detalle__valor numero">{formatearMonto(monto, { signo: 'nunca' })}</p>
                 <p className="candidato__ruta" style={{ justifyContent: 'center' }}>
                   <span>{origen?.nombre ?? 'Cuenta de origen'}</span>
                   <ArrowRight size={16} aria-hidden="true" />

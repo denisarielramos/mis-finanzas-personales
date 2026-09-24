@@ -3,10 +3,10 @@ import { ArrowRightLeft, ChevronRight, Minus, Plus, Scale, Undo2 } from 'lucide-
 import type { Movimiento } from '../types/db'
 import { ETIQUETA_TIPO_MOVIMIENTO } from '../types/db'
 import { useCatalogo } from '../hooks/useCatalogo'
-import { formatearGs } from '../utils/money'
 import { formatearFechaConHora } from '../utils/date'
 import { iconoPorNombre } from './ui/SelectorIcono'
 import { signoDeMovimiento, type Operacion } from '../utils/movimientos'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 const ICONO_POR_TIPO = {
   ingreso: Plus,
@@ -17,6 +17,7 @@ const ICONO_POR_TIPO = {
 
 function FilaMovimiento({ movimiento }: { movimiento: Movimiento }) {
   const navegar = useNavigate()
+  const { monto } = usePrivacidad()
   const { categoriaPorId, cuentaPorId } = useCatalogo()
 
   const categoria = categoriaPorId(movimiento.categoria_id)
@@ -70,7 +71,7 @@ function FilaMovimiento({ movimiento }: { movimiento: Movimiento }) {
         className={`lista__monto numero ${signo === 'positivo' ? 'texto-positivo' : signo === 'negativo' ? 'texto-negativo' : ''}`}
         style={anulado ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}
       >
-        {formatearGs(signo === 'negativo' ? -movimiento.monto : movimiento.monto, {
+        {monto(signo === 'negativo' ? -movimiento.monto : movimiento.monto, {
           signo: signo === 'positivo' ? 'siempre' : signo === 'negativo' ? 'auto' : 'nunca',
         })}
       </span>
@@ -87,6 +88,7 @@ function FilaTransferencia({
 }) {
   const navegar = useNavigate()
   const { cuentaPorId } = useCatalogo()
+  const { monto } = usePrivacidad()
 
   const origen = cuentaPorId(operacion.salida?.cuenta_id)
   const destino = cuentaPorId(operacion.entrada?.cuenta_id)
@@ -138,7 +140,7 @@ function FilaTransferencia({
         className="lista__monto numero texto-suave"
         style={anulado ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}
       >
-        {formatearGs(operacion.monto, { signo: 'nunca' })}
+        {monto(operacion.monto, { signo: 'nunca' })}
       </span>
 
       <ChevronRight size={18} className="lista__flecha" aria-hidden="true" />

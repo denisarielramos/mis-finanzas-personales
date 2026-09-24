@@ -10,8 +10,9 @@ import { useCarga } from '../hooks/useCarga'
 import { obtenerDetallePresupuesto } from '../services/budgetsService'
 import { agruparOperaciones } from '../utils/movimientos'
 import { formatearFecha } from '../utils/date'
-import { formatearGs, porcentaje } from '../utils/money'
+import { porcentaje } from '../utils/money'
 import type { UUID } from '../types/db'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /**
  * Detalle de un presupuesto: cifras del periodo y los gastos reales que lo
@@ -19,6 +20,7 @@ import type { UUID } from '../types/db'
  * el total de la lista coincide siempre con el «Gastado» del listado.
  */
 export function PresupuestoDetallePage() {
+  const { monto } = usePrivacidad()
   const { id = '' } = useParams()
   const navegar = useNavigate()
   const { categorias, categoriaPorId } = useCatalogo()
@@ -43,10 +45,10 @@ export function PresupuestoDetallePage() {
       totales.set(m.categoria_id, (totales.get(m.categoria_id) ?? 0) + m.monto)
     }
     return [...totales.entries()]
-      .map(([categoriaId, monto]) => ({
+      .map(([categoriaId, total]) => ({
         categoriaId,
         nombre: categoriaPorId(categoriaId)?.nombre ?? 'Sin categoría',
-        monto,
+        monto: total,
       }))
       .sort((a, b) => b.monto - a.monto)
   }, [movimientos, categoriaPorId])
@@ -93,8 +95,8 @@ export function PresupuestoDetallePage() {
               </div>
 
               <div className="presupuesto__cifras">
-                <span className="presupuesto__gastado numero">{formatearGs(gastado)}</span>
-                <span className="texto-suave numero">de {formatearGs(limite)}</span>
+                <span className="presupuesto__gastado numero">{monto(gastado)}</span>
+                <span className="texto-suave numero">de {monto(limite)}</span>
               </div>
 
               <div className="progreso">
@@ -112,7 +114,7 @@ export function PresupuestoDetallePage() {
               <div className="presupuesto__pie">
                 <span className={disponible < 0 ? 'texto-negativo' : ''}>
                   {disponible < 0 ? 'Excedido en ' : 'Disponible: '}
-                  <span className="numero">{formatearGs(Math.abs(disponible))}</span>
+                  <span className="numero">{monto(Math.abs(disponible))}</span>
                 </span>
                 {presupuesto.activo ? null : <span className="etiqueta">Desactivado</span>}
               </div>
@@ -122,18 +124,18 @@ export function PresupuestoDetallePage() {
               <div className="datos">
                 <div className="datos__fila">
                   <span className="datos__clave">Límite</span>
-                  <span className="datos__valor numero">{formatearGs(limite)}</span>
+                  <span className="datos__valor numero">{monto(limite)}</span>
                 </div>
                 <div className="datos__fila">
                   <span className="datos__clave">Gastado</span>
-                  <span className="datos__valor numero">{formatearGs(gastado)}</span>
+                  <span className="datos__valor numero">{monto(gastado)}</span>
                 </div>
                 <div className="datos__fila">
                   <span className="datos__clave">Disponible</span>
                   <span
                     className={`datos__valor numero ${disponible < 0 ? 'texto-negativo' : ''}`}
                   >
-                    {formatearGs(disponible)}
+                    {monto(disponible)}
                   </span>
                 </div>
                 <div className="datos__fila">
@@ -159,7 +161,7 @@ export function PresupuestoDetallePage() {
                     {porCategoria.map((fila) => (
                       <div className="datos__fila" key={fila.categoriaId}>
                         <span className="datos__clave">{fila.nombre}</span>
-                        <span className="datos__valor numero">{formatearGs(fila.monto)}</span>
+                        <span className="datos__valor numero">{monto(fila.monto)}</span>
                       </div>
                     ))}
                   </div>
@@ -196,7 +198,7 @@ export function PresupuestoDetallePage() {
                     <div className="linea-proyectada">
                       <span className="linea-proyectada__etiqueta">Total consumido</span>
                       <span className="linea-proyectada__valor numero">
-                        {formatearGs(gastado)}
+                        {monto(gastado)}
                       </span>
                     </div>
                   </div>

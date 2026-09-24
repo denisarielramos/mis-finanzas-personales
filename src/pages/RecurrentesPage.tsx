@@ -34,8 +34,9 @@ import {
   type UUID,
 } from '../types/db'
 import { formatearFecha, hoyISO, partesFecha } from '../utils/date'
-import { formatearGs, parsearEntradaMonto } from '../utils/money'
+import { parsearEntradaMonto } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 type ModoDia = 'fijo' | 'ultimo'
 
@@ -139,6 +140,7 @@ interface Props {
  * pagos viven en el módulo de Cuotas, que es otra cosa.
  */
 export function RecurrentesPage({ enfoque = 'todos' }: Props) {
+  const { monto } = usePrivacidad()
   const { cuentas, categorias } = useCatalogo()
   const avisos = useAvisos()
 
@@ -429,7 +431,7 @@ export function RecurrentesPage({ enfoque = 'todos' }: Props) {
                     <span
                       className={`lista__monto numero ${esIngreso ? 'texto-positivo' : 'texto-negativo'}`}
                     >
-                      {formatearGs(esIngreso ? recurrente.monto : -recurrente.monto, {
+                      {monto(esIngreso ? recurrente.monto : -recurrente.monto, {
                         signo: esIngreso ? 'siempre' : 'auto',
                       })}
                       {soloGastosFijos ? <span className="lista__periodo">/ mes</span> : null}

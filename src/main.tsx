@@ -6,6 +6,7 @@ import { registerSW } from 'virtual:pwa-register'
 import { App } from './App'
 import { ProveedorAuth } from './hooks/useAuth'
 import { ProveedorAvisos } from './hooks/useToast'
+import { ProveedorPrivacidad } from './hooks/usePrivacidad'
 import './styles/index.css'
 
 const contenedor = document.getElementById('root')
@@ -15,9 +16,11 @@ createRoot(contenedor).render(
   <StrictMode>
     <BrowserRouter>
       <ProveedorAvisos>
-        <ProveedorAuth>
-          <App />
-        </ProveedorAuth>
+        <ProveedorPrivacidad>
+          <ProveedorAuth>
+            <App />
+          </ProveedorAuth>
+        </ProveedorPrivacidad>
       </ProveedorAvisos>
     </BrowserRouter>
   </StrictMode>,

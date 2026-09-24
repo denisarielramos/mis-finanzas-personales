@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Receipt } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
+import { BotonPrivacidad } from '../components/BotonPrivacidad'
 import { SelectorMes } from '../components/SelectorMes'
 import { FilaOperacion } from '../components/FilaOperacion'
 import { Segmentos } from '../components/ui/Segmentos'
@@ -41,6 +42,7 @@ export function MovimientosPage() {
       <Encabezado
         titulo="Movimientos"
         subtitulo={`${capitalizar(mes.etiqueta)}${cargando ? '' : ` · ${cantidad} ${cantidad === 1 ? 'operación' : 'operaciones'}`}`}
+        acciones={<BotonPrivacidad />}
       />
 
       <div className="contenedor">

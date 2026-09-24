@@ -13,7 +13,8 @@ import {
 } from '../services/installmentsService'
 import { ETIQUETA_ESTADO_PLAN, type PlanCuotasResumen } from '../types/db'
 import { formatearFecha } from '../utils/date'
-import { formatearGs, porcentaje } from '../utils/money'
+import { porcentaje } from '../utils/money'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /**
  * Cuotas y financiaciones.
@@ -22,6 +23,7 @@ import { formatearGs, porcentaje } from '../utils/money'
  * `public.movimientos` ni afectan a los saldos hasta que se pagan.
  */
 export function CuotasPage() {
+  const { monto } = usePrivacidad()
   const navegar = useNavigate()
 
   const { datos, cargando, error } = useCarga(
@@ -73,7 +75,7 @@ export function CuotasPage() {
         </div>
 
         <div className="plan__cifras">
-          <span className="plan__pendiente numero">Cuota: {formatearGs(montoCuota)}</span>
+          <span className="plan__pendiente numero">Cuota: {monto(montoCuota)}</span>
           <span className="texto-suave numero">
             {plan.cuotas_pagadas} de {plan.cantidad_cuotas} pagadas
           </span>
@@ -92,7 +94,7 @@ export function CuotasPage() {
         </div>
 
         <div className="plan__pie">
-          <span className="numero">Pendiente: {formatearGs(plan.saldo_pendiente)}</span>
+          <span className="numero">Pendiente: {monto(plan.saldo_pendiente)}</span>
           <span>
             {plan.estado === 'activo' && fechaProxima ? (
               <>
@@ -128,7 +130,7 @@ export function CuotasPage() {
       <div className="contenedor">
         <div className="tarjeta tarjeta--oscura patrimonio">
           <p className="patrimonio__etiqueta">Deuda pendiente total</p>
-          <p className="patrimonio__monto numero">{cargando ? '—' : formatearGs(deuda)}</p>
+          <p className="patrimonio__monto numero">{cargando ? '—' : monto(deuda)}</p>
           <p className="patrimonio__pie">
             {activos.length === 1
               ? '1 financiación activa'

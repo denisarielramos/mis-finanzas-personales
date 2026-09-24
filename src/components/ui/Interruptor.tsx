@@ -4,13 +4,22 @@ interface Props {
   activo: boolean
   onCambio: (activo: boolean) => void
   disabled?: boolean
+  /** Solo el interruptor: la etiqueta queda para lectores de pantalla. */
+  compacto?: boolean
 }
 
 /** Interruptor al estilo iOS. */
-export function Interruptor({ etiqueta, descripcion, activo, onCambio, disabled }: Props) {
+export function Interruptor({
+  etiqueta,
+  descripcion,
+  activo,
+  onCambio,
+  disabled,
+  compacto = false,
+}: Props) {
   return (
-    <label className="interruptor">
-      <span>
+    <label className={`interruptor${compacto ? ' interruptor--compacto' : ''}`}>
+      <span className={compacto ? 'solo-lectores' : undefined}>
         <span className="interruptor__texto">{etiqueta}</span>
         {descripcion ? (
           <span className="campo__ayuda" style={{ display: 'block' }}>

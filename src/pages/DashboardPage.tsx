@@ -5,6 +5,7 @@ import { Encabezado } from '../components/Encabezado'
 import { SelectorMes } from '../components/SelectorMes'
 import { FilaOperacion } from '../components/FilaOperacion'
 import { ProximosMovimientos } from '../components/ProximosMovimientos'
+import { BotonPrivacidad } from '../components/BotonPrivacidad'
 import { EsqueletoLista, EstadoVacio, Mensaje } from '../components/ui/Estados'
 import { Boton } from '../components/ui/Boton'
 import { iconoPorNombre } from '../components/ui/SelectorIcono'
@@ -15,7 +16,7 @@ import { listarMovimientos, resumenPeriodo } from '../services/movementsService'
 import { listarProximosMovimientos, resumirPlanificacion } from '../services/upcomingService'
 import { agruparOperaciones } from '../utils/movimientos'
 import { capitalizar, mesActual } from '../utils/date'
-import { formatearGs } from '../utils/money'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 // El gráfico arrastra la librería de charts: se carga aparte para que la
 // primera pantalla en el móvil sea lo más ligera posible.
@@ -25,6 +26,7 @@ const GraficoGastos = lazy(() =>
 
 /** Inicio: patrimonio, resumen del mes, cuentas, últimos movimientos y gasto por categoría. */
 export function DashboardPage() {
+  const { monto } = usePrivacidad()
   const {
     saldos,
     cargando: cargandoCatalogo,
@@ -88,7 +90,12 @@ export function DashboardPage() {
 
   return (
     <>
-      <Encabezado titulo="Mis Finanzas" subtitulo={capitalizar(mes.etiqueta)} ancho />
+      <Encabezado
+        titulo="Mis Finanzas"
+        subtitulo={capitalizar(mes.etiqueta)}
+        ancho
+        acciones={<BotonPrivacidad />}
+      />
 
       <div className="contenedor contenedor--ancho">
         {/* Se permite avanzar a meses futuros para revisar la planificación. */}
@@ -104,7 +111,7 @@ export function DashboardPage() {
           <div className="tarjeta tarjeta--oscura patrimonio">
             <p className="patrimonio__etiqueta">Patrimonio total</p>
             <p className="patrimonio__monto numero">
-              {cargandoCatalogo ? '—' : formatearGs(patrimonio)}
+              {cargandoCatalogo ? '—' : monto(patrimonio)}
             </p>
             <p className="patrimonio__pie">
               {totalCuentasIncluidas === 1
@@ -121,7 +128,7 @@ export function DashboardPage() {
                 <TrendingUp size={13} aria-hidden="true" /> Ingresos
               </span>
               <p className="resumen__valor numero texto-positivo">
-                {resumen.cargando ? '—' : formatearGs(resumen.datos?.ingresos ?? 0)}
+                {resumen.cargando ? '—' : monto(resumen.datos?.ingresos ?? 0)}
               </p>
             </div>
             <div className="resumen__celda">
@@ -129,7 +136,7 @@ export function DashboardPage() {
                 <TrendingDown size={13} aria-hidden="true" /> Gastos
               </span>
               <p className="resumen__valor numero texto-negativo">
-                {resumen.cargando ? '—' : formatearGs(resumen.datos?.gastos ?? 0)}
+                {resumen.cargando ? '—' : monto(resumen.datos?.gastos ?? 0)}
               </p>
             </div>
             <div className="resumen__celda">
@@ -139,7 +146,7 @@ export function DashboardPage() {
               <p
                 className={`resumen__valor numero ${(resumen.datos?.balance ?? 0) < 0 ? 'texto-negativo' : ''}`}
               >
-                {resumen.cargando ? '—' : formatearGs(resumen.datos?.balance ?? 0)}
+                {resumen.cargando ? '—' : monto(resumen.datos?.balance ?? 0)}
               </p>
             </div>
           </div>
@@ -166,7 +173,7 @@ export function DashboardPage() {
                 {esMesActual ? 'Ingresos pendientes' : 'Ingresos previstos'}
               </span>
               <p className="resumen__valor numero texto-positivo">
-                {previstoMes.cargando ? '—' : formatearGs(planificacion.ingresosPendientes)}
+                {previstoMes.cargando ? '—' : monto(planificacion.ingresosPendientes)}
               </p>
             </div>
             <div className="resumen__celda">
@@ -175,7 +182,7 @@ export function DashboardPage() {
                 {esMesActual ? 'Pagos pendientes' : 'Gastos previstos'}
               </span>
               <p className="resumen__valor numero texto-negativo">
-                {previstoMes.cargando ? '—' : formatearGs(planificacion.pagosPendientes)}
+                {previstoMes.cargando ? '—' : monto(planificacion.pagosPendientes)}
               </p>
             </div>
             <div className="resumen__celda">
@@ -185,7 +192,7 @@ export function DashboardPage() {
               <p
                 className={`resumen__valor numero ${planificacion.flujoPrevisto < 0 ? 'texto-negativo' : ''}`}
               >
-                {previstoMes.cargando ? '—' : formatearGs(planificacion.flujoPrevisto)}
+                {previstoMes.cargando ? '—' : monto(planificacion.flujoPrevisto)}
               </p>
             </div>
           </div>
@@ -199,7 +206,7 @@ export function DashboardPage() {
                 >
                   {cargandoCatalogo || previstoMes.cargando
                     ? '—'
-                    : formatearGs(disponibleProyectado)}
+                    : monto(disponibleProyectado)}
                 </span>
               </div>
             </div>
@@ -271,7 +278,7 @@ export function DashboardPage() {
                           ) : null}
                         </span>
                         <span className="lista__monto numero">
-                          {formatearGs(cuenta.saldo_actual)}
+                          {monto(cuenta.saldo_actual)}
                         </span>
                       </Link>
                     </li>
