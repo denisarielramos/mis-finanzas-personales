@@ -19,10 +19,10 @@ export function CuentasPage() {
   const { monto } = usePrivacidad()
   const navegar = useNavigate()
   const avisos = useAvisos()
-  const { cuentas, saldos, cargando, error, saldoPorId, refrescar } = useCatalogo()
+  const { cuentas, saldos, cargando, error, saldoPorId, actualizarCuentaLocal } = useCatalogo()
 
-  /** Valor optimista mientras la base confirma el cambio del interruptor. */
-  const [pendientes, setPendientes] = useState<Record<UUID, boolean>>({})
+  /** Cuentas con una escritura en curso: evita el doble toque. */
+  const [pendientes, setPendientes] = useState<Record<UUID, true>>({})
 
   const patrimonio = useMemo(() => calcularPatrimonio(saldos), [saldos])
   const activas = useMemo(() => cuentas.filter((c) => c.activa), [cuentas])
@@ -32,13 +32,24 @@ export function CuentasPage() {
    * Cambia `incluir_en_total` con la misma actualización de cuentas de
    * siempre. No toca saldos ni movimientos: solo decide qué cuentas suman
    * en el patrimonio total (y, por tanto, en el disponible proyectado).
+   *
+   * El cambio se aplica primero en memoria, así el interruptor y el
+   * patrimonio responden al instante; después va el PATCH. Si la base
+   * rechaza el cambio se vuelve al valor anterior. No se recarga el
+   * catálogo: lo único que cambió ya se conoce.
    */
-  async function alternarIncluir(id: UUID, incluir: boolean) {
-    setPendientes((actuales) => ({ ...actuales, [id]: incluir }))
+  async function alternarIncluir(id: UUID, anterior: boolean, incluir: boolean) {
+    if (pendientes[id]) return
+
+    setPendientes((actuales) => ({ ...actuales, [id]: true }))
+    actualizarCuentaLocal(id, { incluir_en_total: incluir })
+
     try {
-      await actualizarCuenta(id, { incluir_en_total: incluir })
-      await refrescar()
+      // La fila que devuelve el PATCH es la versión confirmada por la base.
+      const guardada = await actualizarCuenta(id, { incluir_en_total: incluir })
+      actualizarCuentaLocal(id, { incluir_en_total: guardada.incluir_en_total })
     } catch (e) {
+      actualizarCuentaLocal(id, { incluir_en_total: anterior })
       avisos.error(textoDeExcepcion(e, 'No se pudo cambiar la cuenta.'))
     } finally {
       setPendientes((actuales) => {
@@ -100,7 +111,7 @@ export function CuentasPage() {
               {activas.map((cuenta) => {
                 const Icono = iconoPorNombre(cuenta.icono, Wallet)
                 const saldo = saldoPorId(cuenta.id)
-                const incluida = pendientes[cuenta.id] ?? cuenta.incluir_en_total
+                const incluida = cuenta.incluir_en_total
                 return (
                   <li className="fila-con-accion fila-con-accion--compacta" key={cuenta.id}>
                     <button
@@ -136,8 +147,8 @@ export function CuentasPage() {
                         compacto
                         etiqueta={`Incluir ${cuenta.nombre} en el patrimonio`}
                         activo={incluida}
-                        disabled={pendientes[cuenta.id] !== undefined}
-                        onCambio={(valor) => alternarIncluir(cuenta.id, valor)}
+                        disabled={pendientes[cuenta.id] === true}
+                        onCambio={(valor) => alternarIncluir(cuenta.id, incluida, valor)}
                       />
                     </span>
                   </li>

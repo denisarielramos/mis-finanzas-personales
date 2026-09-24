@@ -25,7 +25,7 @@ export function MovimientosPage() {
   const [mes, setMes] = useState(() => mesActual())
   const [filtro, setFiltro] = useState<FiltroMovimientos>('todos')
 
-  const { datos, cargando, error } = useCarga(
+  const { datos, cargando, desfasado, error } = useCarga(
     () => listarMovimientos({ desde: mes.desde, hasta: mes.hasta, filtro, limite: 300 }),
     [mes.desde, mes.hasta, filtro],
     'No se pudieron cargar los movimientos.',
@@ -41,7 +41,11 @@ export function MovimientosPage() {
     <>
       <Encabezado
         titulo="Movimientos"
-        subtitulo={`${capitalizar(mes.etiqueta)}${cargando ? '' : ` · ${cantidad} ${cantidad === 1 ? 'operación' : 'operaciones'}`}`}
+        subtitulo={`${capitalizar(mes.etiqueta)}${
+          cargando || desfasado
+            ? ''
+            : ` · ${cantidad} ${cantidad === 1 ? 'operación' : 'operaciones'}`
+        }`}
         acciones={<BotonPrivacidad />}
       />
 
@@ -81,18 +85,25 @@ export function MovimientosPage() {
             />
           </div>
         ) : (
-          grupos.map((grupo) => (
-            <section key={grupo.fecha}>
-              <h2 className="grupo-fecha">{etiquetaGrupoFecha(grupo.fecha)}</h2>
-              <ul className="lista">
-                {grupo.operaciones.map((operacion) => (
-                  <li key={operacion.clave}>
-                    <FilaOperacion operacion={operacion} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))
+          // Mientras llega otro mes u otro filtro se mantiene la lista anterior
+          // atenuada: nada desaparece y no hay saltos de altura.
+          <div
+            className={`revalidable${desfasado ? ' revalidable--ocupado' : ''}`}
+            aria-busy={desfasado}
+          >
+            {grupos.map((grupo) => (
+              <section key={grupo.fecha}>
+                <h2 className="grupo-fecha">{etiquetaGrupoFecha(grupo.fecha)}</h2>
+                <ul className="lista">
+                  {grupo.operaciones.map((operacion) => (
+                    <li key={operacion.clave}>
+                      <FilaOperacion operacion={operacion} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
       </div>
     </>

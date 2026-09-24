@@ -32,7 +32,7 @@ export function CuentaFormPage({ modo = 'crear' }: Props) {
   const navegar = useNavigate()
   const avisos = useAvisos()
   const enLinea = useConexion()
-  const { refrescar } = useCatalogo()
+  const { actualizarCuentaLocal, refrescarCuentas, refrescarSaldos } = useCatalogo()
 
   const editando = modo === 'editar'
 
@@ -115,14 +115,20 @@ export function CuentaFormPage({ modo = 'crear' }: Props) {
       }
 
       if (editando) {
-        await actualizarCuenta(id, datos)
+        const guardada = await actualizarCuenta(id, datos)
+        // Lo que cambió ya se conoce: se aplica en memoria en vez de volver a
+        // descargar el catálogo. El saldo inicial sí afecta al saldo actual,
+        // que calcula la vista, así que los saldos se revalidan en silencio.
+        actualizarCuentaLocal(id, guardada)
+        void refrescarSaldos()
         avisos.exito('Cuenta actualizada correctamente.')
       } else {
         await crearCuenta(datos)
+        // Es una fila nueva: hay que traerla, pero sin vaciar la pantalla.
+        await Promise.all([refrescarCuentas(), refrescarSaldos()])
         avisos.exito('Cuenta creada correctamente.')
       }
 
-      await refrescar()
       navegar('/cuentas')
     } catch (e) {
       avisos.error(
@@ -136,10 +142,13 @@ export function CuentaFormPage({ modo = 'crear' }: Props) {
   async function alternarEstado() {
     setCambiandoEstado(true)
     try {
-      await cambiarEstadoCuenta(id, !activa)
-      setActiva((valor) => !valor)
-      await refrescar()
-      avisos.exito(activa ? 'Cuenta desactivada.' : 'Cuenta activada.')
+      const nuevoEstado = !activa
+      await cambiarEstadoCuenta(id, nuevoEstado)
+      setActiva(nuevoEstado)
+      // La cuenta cambia de sección y sale (o vuelve) al patrimonio al
+      // instante, sin recargar el catálogo entero. El saldo no se toca.
+      actualizarCuentaLocal(id, { activa: nuevoEstado })
+      avisos.exito(nuevoEstado ? 'Cuenta activada.' : 'Cuenta desactivada.')
       navegar('/cuentas')
     } catch (e) {
       avisos.error(textoDeExcepcion(e, 'No se pudo cambiar el estado de la cuenta.'))

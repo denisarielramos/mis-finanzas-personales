@@ -51,7 +51,7 @@ const FORMULARIO_VACIO: EstadoFormulario = {
 
 /** Categorías: crear, editar y desactivar, con soporte de categorías hijas. */
 export function CategoriasPage() {
-  const { categorias, cargando, error, refrescar } = useCatalogo()
+  const { categorias, cargando, error, refrescarCategorias } = useCatalogo()
   const avisos = useAvisos()
 
   const [filtro, setFiltro] = useState<FiltroTipo>('todas')
@@ -131,7 +131,9 @@ export function CategoriasPage() {
         avisos.exito('Categoría creada correctamente.')
       }
 
-      await refrescar()
+      // Solo cambiaron las categorías: no hace falta volver a traer cuentas
+      // ni saldos, y la lista sigue en pantalla mientras se revalida.
+      await refrescarCategorias()
       setFormulario(null)
     } catch (e) {
       avisos.error(textoDeExcepcion(e, 'No se pudo guardar la categoría.'))

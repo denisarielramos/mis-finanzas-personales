@@ -35,31 +35,39 @@ export function DashboardPage() {
     cuentaPorId,
   } = useCatalogo()
   const [mes, setMes] = useState(() => mesActual())
-  // Se incrementa al confirmar un cobro o un pago, para recargar todo.
-  const [version, setVersion] = useState(0)
 
   const resumen = useCarga(
     () => resumenPeriodo(mes.desde, mes.hasta),
-    [mes.desde, mes.hasta, version],
+    [mes.desde, mes.hasta],
     'No se pudo calcular el resumen del mes.',
   )
 
   const ultimos = useCarga(
     () => listarMovimientos({ limite: 12 }),
-    [version],
+    [],
     'No se pudieron cargar los últimos movimientos.',
   )
 
   /**
    * Previsiones del mes seleccionado: una sola carga que alimenta tanto los
    * totales de Planificación como la lista de movimientos previstos.
-   * `version` se incrementa al confirmar, así ambas secciones se refrescan.
    */
   const previstoMes = useCarga(
     () => listarProximosMovimientos({ desde: mes.desde, hasta: mes.hasta, limite: 50 }),
-    [mes.desde, mes.hasta, version],
+    [mes.desde, mes.hasta],
     'No se pudieron cargar los movimientos previstos del mes.',
   )
+
+  /**
+   * Tras confirmar un cobro o un pago se revalida en silencio: los datos
+   * anteriores siguen en pantalla y se sustituyen cuando llegan los nuevos.
+   * La escritura ya la hizo el RPC correspondiente.
+   */
+  function revalidar() {
+    void resumen.recargar()
+    void ultimos.recargar()
+    void previstoMes.recargar()
+  }
 
   const patrimonio = useMemo(() => calcularPatrimonio(saldos), [saldos])
   const cuentasVisibles = useMemo(
@@ -121,7 +129,11 @@ export function DashboardPage() {
           </div>
         </section>
 
-        <section className="seccion" aria-label="Resumen del mes">
+        <section
+          className={`seccion revalidable${resumen.desfasado ? ' revalidable--ocupado' : ''}`}
+          aria-label="Resumen del mes"
+          aria-busy={resumen.desfasado}
+        >
           <div className="resumen">
             <div className="resumen__celda">
               <span className="resumen__etiqueta">
@@ -156,7 +168,11 @@ export function DashboardPage() {
           {resumen.error ? <Mensaje tipo="error">{resumen.error}</Mensaje> : null}
         </section>
 
-        <section className="seccion" aria-label="Planificación del mes">
+        <section
+          className={`seccion revalidable${previstoMes.desfasado ? ' revalidable--ocupado' : ''}`}
+          aria-label="Planificación del mes"
+          aria-busy={previstoMes.desfasado}
+        >
           <div className="seccion__cabecera">
             <h2 className="seccion__titulo">Planificación</h2>
             {planificacion.vencidos > 0 ? (
@@ -220,7 +236,11 @@ export function DashboardPage() {
           {previstoMes.error ? <Mensaje tipo="error">{previstoMes.error}</Mensaje> : null}
         </section>
 
-        <section className="seccion" aria-label="Movimientos previstos del mes">
+        <section
+          className={`seccion revalidable${previstoMes.desfasado ? ' revalidable--ocupado' : ''}`}
+          aria-label="Movimientos previstos del mes"
+          aria-busy={previstoMes.desfasado}
+        >
           <div className="seccion__cabecera" style={{ marginBottom: 4 }}>
             <h2 className="seccion__titulo">Movimientos previstos del mes</h2>
           </div>
@@ -235,7 +255,7 @@ export function DashboardPage() {
             proximos={previstoMes.datos ?? []}
             cargando={previstoMes.cargando}
             error={previstoMes.error}
-            onCambio={() => setVersion((v) => v + 1)}
+            onCambio={revalidar}
           />
         </section>
 
@@ -322,7 +342,11 @@ export function DashboardPage() {
           </section>
         </div>
 
-        <section className="seccion" aria-label="Gastos por categoría">
+        <section
+          className={`seccion revalidable${resumen.desfasado ? ' revalidable--ocupado' : ''}`}
+          aria-label="Gastos por categoría"
+          aria-busy={resumen.desfasado}
+        >
           <div className="seccion__cabecera">
             <h2 className="seccion__titulo">Gastos por categoría</h2>
           </div>

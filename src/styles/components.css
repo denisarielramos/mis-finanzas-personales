@@ -567,6 +567,13 @@ input[type='date'].control {
   opacity: 0.6;
 }
 
+/* En una fila de lista la escritura dura un instante: el interruptor se
+   bloquea para evitar el doble toque, pero no se atenúa; el cambio de estado
+   ya es la respuesta y atenuarlo parecería un error. */
+.interruptor--compacto input:disabled + .interruptor__control {
+  opacity: 1;
+}
+
 .interruptor__control {
   position: relative;
   width: 51px;
@@ -977,4 +984,21 @@ input[type='date'].control {
 .mensaje svg {
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+/* Zona cuyos datos siguen en pantalla mientras llega una consulta nueva
+   (otro mes, otro filtro). Se atenúa en lugar de vaciarse: sin parpadeo,
+   sin esqueleto y sin saltos de altura. */
+.revalidable {
+  transition: opacity 180ms ease;
+}
+
+.revalidable--ocupado {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revalidable {
+    transition: none;
+  }
 }
