@@ -4,6 +4,7 @@ import { CreditCard, WifiOff } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
 import { Campo } from '../components/ui/Campo'
+import { SelectorCategoriaJerarquica } from '../components/SelectorCategoriaJerarquica'
 import { InputMonto } from '../components/ui/CampoMonto'
 import { Segmentos } from '../components/ui/Segmentos'
 import { Mensaje } from '../components/ui/Estados'
@@ -11,7 +12,6 @@ import { useCatalogo } from '../hooks/useCatalogo'
 import { useAvisos } from '../hooks/useToast'
 import { useConexion } from '../hooks/useConexion'
 import { crearPlanCuotas } from '../services/installmentsService'
-import { categoriaAdmite } from '../services/categoriesService'
 import type { UUID } from '../types/db'
 import { formatearFecha, hoyISO, sumarDias, sumarMeses } from '../utils/date'
 import { formatearGs, parsearEntradaMonto } from '../utils/money'
@@ -53,11 +53,6 @@ export function PlanCuotasFormPage() {
 
   const [guardando, setGuardando] = useState(false)
   const [errores, setErrores] = useState<Record<string, string>>({})
-
-  const categoriasGasto = useMemo(
-    () => categorias.filter((c) => c.activa && categoriaAdmite(c, 'gasto')),
-    [categorias],
-  )
 
   const cantidad = Number.parseInt(cantidadCuotas, 10)
   const frecuencia = Number.parseInt(frecuenciaMeses, 10)
@@ -303,24 +298,12 @@ export function PlanCuotasFormPage() {
             )}
           </Campo>
 
-          <Campo etiqueta="Categoría">
-            {(props) => (
-              <select
-                {...props}
-                className="control"
-                value={categoriaId}
-                onChange={(e) => setCategoriaId(e.target.value)}
-              >
-                <option value="">Sin categoría</option>
-                {categoriasGasto.map((categoria) => (
-                  <option key={categoria.id} value={categoria.id}>
-                    {categoria.categoria_padre_id ? '— ' : ''}
-                    {categoria.nombre}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Campo>
+          <SelectorCategoriaJerarquica
+            categorias={categorias}
+            tipo="gasto"
+            valor={categoriaId}
+            onCambio={setCategoriaId}
+          />
 
           <Campo etiqueta="Descripción">
             {(props) => (

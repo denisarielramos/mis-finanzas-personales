@@ -3,6 +3,7 @@ import { Ban, CheckCircle2, ChevronRight, Plus, Repeat } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
 import { Campo } from '../components/ui/Campo'
+import { SelectorCategoriaJerarquica } from '../components/SelectorCategoriaJerarquica'
 import { InputMonto } from '../components/ui/CampoMonto'
 import { Dialogo } from '../components/ui/Dialogo'
 import { Hoja } from '../components/ui/Hoja'
@@ -165,11 +166,6 @@ export function RecurrentesPage({ enfoque = 'todos' }: Props) {
     [datos, soloGastosFijos],
   )
   const cuentasActivas = useMemo(() => cuentas.filter((c) => c.activa), [cuentas])
-
-  const categoriasDisponibles = useMemo(
-    () => categorias.filter((c) => c.activa && categoriaAdmite(c, formulario?.tipo ?? 'gasto')),
-    [categorias, formulario?.tipo],
-  )
 
   function abrirNuevo() {
     if (cuentasActivas.length === 0) {
@@ -568,31 +564,12 @@ export function RecurrentesPage({ enfoque = 'todos' }: Props) {
               )}
             </Campo>
 
-            <Campo
-              etiqueta="Categoría"
-              ayuda={
-                categoriasDisponibles.length === 0
-                  ? 'Todavía no tienes categorías para este tipo.'
-                  : undefined
-              }
-            >
-              {(props) => (
-                <select
-                  {...props}
-                  className="control"
-                  value={formulario.categoriaId}
-                  onChange={(e) => setFormulario({ ...formulario, categoriaId: e.target.value })}
-                >
-                  <option value="">Sin categoría</option>
-                  {categoriasDisponibles.map((categoria) => (
-                    <option key={categoria.id} value={categoria.id}>
-                      {categoria.categoria_padre_id ? '— ' : ''}
-                      {categoria.nombre}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Campo>
+            <SelectorCategoriaJerarquica
+              categorias={categorias}
+              tipo={formulario.tipo}
+              valor={formulario.categoriaId}
+              onCambio={(categoriaId) => setFormulario({ ...formulario, categoriaId })}
+            />
 
             {/* Un gasto fijo es mensual por definición: no se pregunta.
                 Si se edita uno con otra frecuencia, el campo sigue visible. */}

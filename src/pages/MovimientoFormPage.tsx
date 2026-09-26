@@ -6,6 +6,7 @@ import { Boton } from '../components/ui/Boton'
 import { Campo } from '../components/ui/Campo'
 import { CampoMonto } from '../components/ui/CampoMonto'
 import { EstadoVacio, Mensaje } from '../components/ui/Estados'
+import { SelectorCategoriaJerarquica } from '../components/SelectorCategoriaJerarquica'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { useAvisos } from '../hooks/useToast'
 import { useConexion } from '../hooks/useConexion'
@@ -49,11 +50,6 @@ export function MovimientoFormPage({ tipo: tipoInicial = 'gasto', modo = 'crear'
   const [errores, setErrores] = useState<Record<string, string>>({})
 
   const cuentasActivas = useMemo(() => cuentas.filter((c) => c.activa), [cuentas])
-
-  const categoriasDisponibles = useMemo(
-    () => categorias.filter((c) => c.activa && categoriaAdmite(c, tipo)),
-    [categorias, tipo],
-  )
 
   // Cuenta por defecto en altas nuevas
   useEffect(() => {
@@ -99,12 +95,17 @@ export function MovimientoFormPage({ tipo: tipoInicial = 'gasto', modo = 'crear'
     }
   }, [editando, id])
 
-  // Si la categoría elegida deja de ser válida al cambiar de tipo, se limpia
+  /**
+   * Si la categoría elegida deja de admitir el tipo (al pasar de gasto a
+   * ingreso, por ejemplo) se limpia junto con su subcategoría. Mientras el
+   * catálogo no haya llegado no se toca nada: si no, al abrir una edición se
+   * borraría la categoría que acaba de cargarse.
+   */
   useEffect(() => {
-    if (categoriaId && !categoriasDisponibles.some((c) => c.id === categoriaId)) {
-      setCategoriaId('')
-    }
-  }, [categoriaId, categoriasDisponibles])
+    if (!categoriaId || categorias.length === 0) return
+    const elegida = categorias.find((c) => c.id === categoriaId)
+    if (!elegida || !categoriaAdmite(elegida, tipo)) setCategoriaId('')
+  }, [categoriaId, categorias, tipo])
 
   function validar(): boolean {
     const nuevos: Record<string, string> = {}
@@ -222,32 +223,13 @@ export function MovimientoFormPage({ tipo: tipoInicial = 'gasto', modo = 'crear'
               )}
             </Campo>
 
-            <Campo
-              etiqueta="Categoría"
-              ayuda={
-                categoriasDisponibles.length === 0
-                  ? 'Todavía no tienes categorías para este tipo.'
-                  : undefined
-              }
-            >
-              {(props) => (
-                <select
-                  {...props}
-                  className="control"
-                  value={categoriaId}
-                  disabled={cargandoOriginal}
-                  onChange={(e) => setCategoriaId(e.target.value)}
-                >
-                  <option value="">Sin categoría</option>
-                  {categoriasDisponibles.map((categoria) => (
-                    <option key={categoria.id} value={categoria.id}>
-                      {categoria.categoria_padre_id ? '— ' : ''}
-                      {categoria.nombre}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Campo>
+            <SelectorCategoriaJerarquica
+              categorias={categorias}
+              tipo={tipo}
+              valor={categoriaId}
+              onCambio={setCategoriaId}
+              disabled={cargandoOriginal}
+            />
 
             <Campo etiqueta="Fecha" error={errores.fecha}>
               {(props) => (
