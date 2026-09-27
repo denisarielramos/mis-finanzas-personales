@@ -244,8 +244,14 @@ export interface DatosPagoCuota {
 
 /**
  * RPC `confirmar_cuota_plan`.
- * Crea el gasto real y marca la cuota como pagada. Es la única vía:
- * el frontend nunca crea ese gasto a mano.
+ *
+ * Crea el gasto real y marca la cuota como pagada. Es la única vía: el
+ * frontend nunca crea ese gasto a mano. Devuelve un jsonb con
+ * `movimiento_id`, `cuota_id` y `plan_id`; la aplicación no lo necesita, pero
+ * se devuelve tal cual por si hiciera falta.
+ *
+ * En un plan fijo la base exige el monto programado y en uno aproximado el
+ * monto realmente pagado: por eso `montoReal` siempre viaja informado.
  */
 export async function confirmarCuotaPlan(datos: DatosPagoCuota): Promise<unknown> {
   const { data, error } = await supabase.rpc('confirmar_cuota_plan', {

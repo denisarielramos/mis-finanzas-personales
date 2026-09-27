@@ -19,6 +19,8 @@
 --      aproximada nazca así en la misma transacción que crea el plan.
 --   6. Hace que `confirmar_cuota_plan` imponga la regla: una cuota fija se
 --      paga por su monto programado y una aproximada exige el monto real.
+--      Conserva su contrato exacto: `returns jsonb` y
+--      `p_fecha_pago date default current_date`.
 --
 -- Sobre los pasos 5 y 6
 --   Las dos funciones existentes NO se reescriben. Se les cambia el nombre a
@@ -138,7 +140,9 @@ left join lateral (
     sum(q.monto_programado) filter (where q.estado = 'pendiente')  as saldo_pendiente,
     min(q.fecha_vencimiento) filter (where q.estado = 'pendiente') as proxima_cuota
   from public.cuotas_plan q
+  -- Mismo aislamiento explícito que la vista de producción.
   where q.plan_id = p.id
+    and q.user_id = p.user_id
 ) c on true
 where p.user_id = auth.uid();
 
@@ -493,9 +497,10 @@ grant execute on function public.crear_plan_cuotas(
 
 do $$
 declare
-  v_firma text;
-  v_base  text;
+  v_firma   text;
+  v_base    oid;
   v_cuantas integer;
+  v_retorno text;
 begin
   select count(*) into v_cuantas
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -515,11 +520,20 @@ begin
     execute format('alter function %s rename to confirmar_cuota_plan_base', v_firma);
   end if;
 
-  select p.oid::regprocedure::text into v_base
+  select p.oid into v_base
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname = 'confirmar_cuota_plan_base';
 
-  execute format('revoke all on function %s from public, anon, authenticated', v_base);
+  -- La envoltura devuelve tal cual lo que devuelve la base. Si el contrato no
+  -- fuese jsonb, mejor parar aquí que romper el registro de pagos.
+  v_retorno := pg_get_function_result(v_base);
+  if v_retorno <> 'jsonb' then
+    raise exception
+      'confirmar_cuota_plan devuelve % y esta migración espera jsonb. Avisa antes de ejecutarla.',
+      v_retorno;
+  end if;
+
+  execute format('revoke all on function %s from public, anon, authenticated', v_base::regprocedure);
 end
 $$;
 
@@ -527,11 +541,12 @@ create or replace function public.confirmar_cuota_plan(
   p_cuota_id    uuid,
   p_cuenta_id   uuid   default null,
   p_monto_real  bigint default null,
-  p_fecha_pago  date   default null,
+  -- Mismo contrato que la función original: omitir la fecha es pagar hoy.
+  p_fecha_pago  date   default current_date,
   p_descripcion text   default null,
   p_notas       text   default null
 )
-returns uuid
+returns jsonb
 language plpgsql
 security definer
 set search_path = public, pg_temp
@@ -582,7 +597,8 @@ begin
     v_monto := v_cuota.monto_programado;
   end if;
 
-  -- El pago lo sigue registrando el código de siempre.
+  -- El pago lo sigue registrando el código de siempre, y su jsonb
+  -- (movimiento_id, cuota_id, plan_id) se devuelve sin tocar.
   return public.confirmar_cuota_plan_base(
     p_cuota_id, p_cuenta_id, v_monto, p_fecha_pago, p_descripcion, p_notas
   );
