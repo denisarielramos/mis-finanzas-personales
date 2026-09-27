@@ -367,6 +367,29 @@ export interface TransferenciaPotencial {
   descripcion_entrada: string | null
   puntaje: number
   nivel: NivelCoincidencia
+  /** Señales por las que la base propuso el par. Falta si el RPC es anterior. */
+  motivos?: string[] | null
+}
+
+/**
+ * Copia del estado original de un movimiento convertido en transferencia por
+ * la conciliación (`public.conciliaciones_movimientos_originales`).
+ *
+ * Mientras `restaurado_en` sea `null`, la conciliación se puede revertir y los
+ * dos movimientos volverán exactamente a como estaban.
+ */
+export interface ConciliacionOriginal {
+  id: UUID
+  user_id: UUID
+  transferencia_id: UUID
+  movimiento_id: UUID
+  rol: 'salida' | 'entrada'
+  tipo: TipoMovimiento
+  monto: MontoPYG
+  descripcion: string | null
+  estado: EstadoMovimiento
+  creado_en: string | null
+  restaurado_en: string | null
 }
 
 export type NivelCoincidencia = 'alta' | 'media' | 'baja'

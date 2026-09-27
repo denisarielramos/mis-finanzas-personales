@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, Pencil, Trash2 } from 'lucide-react'
+import { ArrowRight, Pencil, Trash2, Undo2 } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
 import { Dialogo } from '../components/ui/Dialogo'
@@ -9,6 +9,10 @@ import { useCatalogo } from '../hooks/useCatalogo'
 import { useCarga } from '../hooks/useCarga'
 import { useAvisos } from '../hooks/useToast'
 import { anularTransferencia, obtenerTransferencia } from '../services/transfersService'
+import {
+  obtenerEstadoConciliacion,
+  revertirConciliacion,
+} from '../services/reconcileService'
 import { listarMovimientosDeTransferencia } from '../services/movementsService'
 import { ETIQUETA_ESTADO_TRANSFERENCIA } from '../types/db'
 import { formatearFecha, formatearFechaHora } from '../utils/date'
@@ -28,14 +32,17 @@ export function TransferenciaDetallePage() {
 
   const [confirmando, setConfirmando] = useState(false)
   const [anulando, setAnulando] = useState(false)
+  const [confirmandoReversion, setConfirmandoReversion] = useState(false)
+  const [revirtiendo, setRevirtiendo] = useState(false)
 
-  const { datos, cargando, error } = useCarga(
+  const { datos, cargando, error, recargar } = useCarga(
     async () => {
-      const [transferencia, movimientos] = await Promise.all([
+      const [transferencia, movimientos, conciliacion] = await Promise.all([
         obtenerTransferencia(id),
         listarMovimientosDeTransferencia(id),
+        obtenerEstadoConciliacion(id),
       ])
-      return { transferencia, movimientos }
+      return { transferencia, movimientos, conciliacion }
     },
     [id],
     'No se pudo cargar la transferencia.',
@@ -43,6 +50,7 @@ export function TransferenciaDetallePage() {
 
   const transferencia = datos?.transferencia ?? null
   const movimientos = datos?.movimientos ?? []
+  const conciliacion = datos?.conciliacion ?? null
   const salida = movimientos.find((m) => m.tipo === 'transferencia_salida') ?? null
   const entrada = movimientos.find((m) => m.tipo === 'transferencia_entrada') ?? null
 
@@ -52,8 +60,23 @@ export function TransferenciaDetallePage() {
     transferencia?.estado === 'cancelada' ||
     (movimientos.length > 0 && movimientos.every((m) => m.estado === 'anulado'))
 
+  /**
+   * Nació de la conciliación y todavía se guarda el estado original de sus dos
+   * movimientos: revertir los devuelve tal cual estaban, no los anula.
+   */
+  const reversible = conciliacion?.reversible === true
+
+  /**
+   * Conciliación anterior a la mejora: no hay copia del estado original, así
+   * que eliminarla anula los dos movimientos. Se avisa antes.
+   */
+  const conciliacionSinCopia =
+    !reversible &&
+    conciliacion?.tieneCopia === false &&
+    (transferencia?.referencia ?? '').toUpperCase().includes('CONCILIACION')
+
   async function eliminar() {
-    if (!transferencia) return
+    if (!transferencia || anulando) return
     setAnulando(true)
     try {
       await anularTransferencia(transferencia.id)
@@ -65,6 +88,24 @@ export function TransferenciaDetallePage() {
     } finally {
       setAnulando(false)
       setConfirmando(false)
+    }
+  }
+
+  async function revertir() {
+    if (!transferencia || revirtiendo) return
+    setRevirtiendo(true)
+    try {
+      await revertirConciliacion(transferencia.id)
+      await refrescarSaldos()
+      avisos.exito('Conciliación revertida: los dos movimientos volvieron a su estado original.')
+      navegar(-1)
+    } catch (e) {
+      avisos.error(textoDeExcepcion(e, 'No se pudo revertir la conciliación.'))
+      // El estado real puede haber cambiado: se vuelve a leer.
+      await recargar()
+    } finally {
+      setRevirtiendo(false)
+      setConfirmandoReversion(false)
     }
   }
 
@@ -140,6 +181,25 @@ export function TransferenciaDetallePage() {
               no cambia.
             </p>
 
+            {reversible && !anulada ? (
+              <div style={{ marginTop: 12 }}>
+                <Mensaje tipo="info">
+                  Esta transferencia se creó conciliando dos movimientos. Al revertirla volverán a
+                  ser el gasto y el ingreso que eran, con su categoría y su descripción.
+                </Mensaje>
+              </div>
+            ) : null}
+
+            {conciliacionSinCopia && !anulada ? (
+              <div style={{ marginTop: 12 }}>
+                <Mensaje tipo="aviso">
+                  Esta conciliación es anterior a la copia de seguridad del estado original, así
+                  que no se puede revertir automáticamente. Si la eliminas, los dos movimientos
+                  quedarán anulados en lugar de volver a ser un gasto y un ingreso.
+                </Mensaje>
+              </div>
+            ) : null}
+
             {transferencia && !anulada ? (
               <div className="acciones-pila">
                 <Boton
@@ -150,14 +210,26 @@ export function TransferenciaDetallePage() {
                 >
                   Editar transferencia
                 </Boton>
-                <Boton
-                  variante="peligro"
-                  bloque
-                  icono={<Trash2 size={17} aria-hidden="true" />}
-                  onClick={() => setConfirmando(true)}
-                >
-                  Eliminar transferencia
-                </Boton>
+
+                {reversible ? (
+                  <Boton
+                    variante="peligro"
+                    bloque
+                    icono={<Undo2 size={17} aria-hidden="true" />}
+                    onClick={() => setConfirmandoReversion(true)}
+                  >
+                    Revertir conciliación
+                  </Boton>
+                ) : (
+                  <Boton
+                    variante="peligro"
+                    bloque
+                    icono={<Trash2 size={17} aria-hidden="true" />}
+                    onClick={() => setConfirmando(true)}
+                  >
+                    Eliminar transferencia
+                  </Boton>
+                )}
               </div>
             ) : null}
           </>
@@ -167,12 +239,41 @@ export function TransferenciaDetallePage() {
       <Dialogo
         abierto={confirmando}
         titulo="¿Eliminar esta transferencia?"
-        mensaje="Se anulará la operación completa: tanto la salida como la entrada. No se borra del historial."
+        mensaje={
+          conciliacionSinCopia
+            ? 'Se anulará la operación completa. Esta conciliación no guarda el estado original, así que los dos movimientos quedarán anulados y no volverán a ser un gasto y un ingreso.'
+            : 'Se anulará la operación completa: tanto la salida como la entrada. No se borra del historial.'
+        }
         textoConfirmar="Eliminar"
         peligroso
         procesando={anulando}
         onConfirmar={eliminar}
-        onCancelar={() => setConfirmando(false)}
+        onCancelar={() => (anulando ? undefined : setConfirmando(false))}
+      />
+
+      <Dialogo
+        abierto={confirmandoReversion}
+        titulo="¿Revertir la conciliación?"
+        mensaje="Los dos movimientos volverán exactamente a como estaban antes de conciliarlos: su tipo, su categoría, su descripción y su importe. La transferencia quedará cancelada."
+        detalle={
+          <div className="confirmacion-conciliacion">
+            <div className="confirmacion-conciliacion__lado">
+              <span className="confirmacion-conciliacion__rol">Volverá a ser un gasto</span>
+              <strong>{origen?.nombre ?? 'Cuenta de origen'}</strong>
+              <span className="texto-suave">{salida?.descripcion || 'Sin descripción'}</span>
+            </div>
+            <div className="confirmacion-conciliacion__lado">
+              <span className="confirmacion-conciliacion__rol">Volverá a ser un ingreso</span>
+              <strong>{destino?.nombre ?? 'Cuenta de destino'}</strong>
+              <span className="texto-suave">{entrada?.descripcion || 'Sin descripción'}</span>
+            </div>
+          </div>
+        }
+        textoConfirmar="Revertir conciliación"
+        peligroso
+        procesando={revirtiendo}
+        onConfirmar={revertir}
+        onCancelar={() => (revirtiendo ? undefined : setConfirmandoReversion(false))}
       />
     </>
   )

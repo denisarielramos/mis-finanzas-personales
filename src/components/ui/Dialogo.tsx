@@ -1,10 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Boton } from './Boton'
 
 interface Props {
   abierto: boolean
   titulo: string
   mensaje: string
+  /** Detalle de lo que se va a hacer, debajo del mensaje. */
+  detalle?: ReactNode
   textoConfirmar?: string
   textoCancelar?: string
   peligroso?: boolean
@@ -18,6 +20,7 @@ export function Dialogo({
   abierto,
   titulo,
   mensaje,
+  detalle,
   textoConfirmar = 'Confirmar',
   textoCancelar = 'Cancelar',
   peligroso = false,
@@ -41,6 +44,7 @@ export function Dialogo({
       <div className="dialogo" role="alertdialog" aria-modal="true" aria-label={titulo}>
         <h2 className="dialogo__titulo">{titulo}</h2>
         <p className="dialogo__texto">{mensaje}</p>
+        {detalle ? <div className="dialogo__detalle">{detalle}</div> : null}
         <div className="dialogo__acciones">
           <Boton variante="secundario" onClick={onCancelar} disabled={procesando}>
             {textoCancelar}

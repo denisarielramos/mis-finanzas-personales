@@ -30,7 +30,9 @@ function clave(candidato: TransferenciaPotencial): string {
 
 /**
  * Conciliación de transferencias.
- * Nada se concilia automáticamente: cada par se confirma a mano.
+ *
+ * Nada se concilia automáticamente: cada par se confirma a mano y con el
+ * detalle de los dos movimientos a la vista.
  */
 export function ConciliacionPage() {
   const avisos = useAvisos()
@@ -53,7 +55,10 @@ export function ConciliacionPage() {
   )
 
   async function confirmar() {
-    if (!confirmando) return
+    // Doble seguro contra el doble toque: además, la base rechaza el segundo
+    // intento porque los movimientos ya dejaron de ser elegibles.
+    if (!confirmando || procesando) return
+
     setProcesando(true)
     try {
       await conciliarTransferencia(confirmando.salida_id, confirmando.entrada_id)
@@ -63,6 +68,9 @@ export function ConciliacionPage() {
       setVersion((v) => v + 1)
     } catch (e) {
       avisos.error(textoDeExcepcion(e, 'No se pudo conciliar la transferencia.'))
+      // Lo que se veía ya no vale: se vuelve a buscar con el estado real.
+      setConfirmando(null)
+      setVersion((v) => v + 1)
     } finally {
       setProcesando(false)
     }
@@ -78,7 +86,7 @@ export function ConciliacionPage() {
       <Encabezado
         titulo="Conciliación"
         volver="/mas"
-        subtitulo={`Coincidencias con hasta ${DIAS_MAX_POR_DEFECTO} días de diferencia`}
+        subtitulo="Solo pares con señales claras de transferencia"
       />
 
       <div className="contenedor">
@@ -89,7 +97,7 @@ export function ConciliacionPage() {
         ) : candidatos.length === 0 ? (
           <EstadoVacio
             titulo="No hay transferencias pendientes de conciliación."
-            texto="Cuando dos movimientos de cuentas distintas parezcan una misma transferencia, aparecerán aquí."
+            texto="Solo aparecen aquí los pares que, además de coincidir en importe y fecha, se describen como un movimiento entre tus cuentas."
             icono={<Link2 size={22} aria-hidden="true" />}
           />
         ) : (
@@ -124,7 +132,6 @@ export function ConciliacionPage() {
                       {motivo}
                     </span>
                   ))}
-                  <span className="etiqueta">Puntaje: {candidato.puntaje}</span>
                 </div>
 
                 <div className="candidato__descripciones">
@@ -140,6 +147,7 @@ export function ConciliacionPage() {
                   <Boton
                     variante="secundario"
                     icono={<X size={16} aria-hidden="true" />}
+                    disabled={procesando}
                     onClick={() => ignorar(candidato)}
                   >
                     Ignorar
@@ -147,6 +155,7 @@ export function ConciliacionPage() {
                   <Boton
                     variante="primario"
                     icono={<Check size={16} aria-hidden="true" />}
+                    disabled={procesando}
                     onClick={() => setConfirmando(candidato)}
                   >
                     Confirmar
@@ -158,23 +167,54 @@ export function ConciliacionPage() {
         )}
 
         <p className="campo__ayuda" style={{ marginTop: 16 }}>
-          «Ignorar» solo oculta la sugerencia durante esta visita: la base de datos actual no tiene
-          dónde guardar los descartes, y esta aplicación no modifica el esquema.
+          «Ignorar» solo oculta la sugerencia durante esta visita: no cambia ningún dato. Nunca se
+          concilia nada sin que lo confirmes.
         </p>
       </div>
 
       <Dialogo
         abierto={confirmando !== null}
-        titulo="¿Confirmar la transferencia?"
-        mensaje={
-          confirmando
-            ? `Los dos movimientos de ${formatearGs(confirmando.monto, { signo: 'nunca' })} pasarán a ser una única transferencia entre ${confirmando.cuenta_origen} y ${confirmando.cuenta_destino}. Dejarán de contar como gasto e ingreso.`
-            : ''
+        titulo="¿Confirmar transferencia?"
+        mensaje="Estos dos movimientos se convertirán en una transferencia entre tus cuentas. Dejarán de contabilizarse como ingreso y gasto. Podrás revertir la conciliación posteriormente."
+        detalle={
+          confirmando ? (
+            <div className="confirmacion-conciliacion">
+              <div className="confirmacion-conciliacion__lado">
+                <span className="confirmacion-conciliacion__rol">Sale de</span>
+                <strong>{confirmando.cuenta_origen}</strong>
+                <span className="texto-suave">
+                  {confirmando.descripcion_salida || 'Sin descripción'}
+                </span>
+                <span className="texto-suave numero">
+                  {formatearFecha(confirmando.fecha_salida)} ·{' '}
+                  {formatearGs(confirmando.monto, { signo: 'nunca' })}
+                </span>
+              </div>
+
+              <ArrowRight
+                size={18}
+                aria-hidden="true"
+                className="confirmacion-conciliacion__flecha"
+              />
+
+              <div className="confirmacion-conciliacion__lado">
+                <span className="confirmacion-conciliacion__rol">Entra en</span>
+                <strong>{confirmando.cuenta_destino}</strong>
+                <span className="texto-suave">
+                  {confirmando.descripcion_entrada || 'Sin descripción'}
+                </span>
+                <span className="texto-suave numero">
+                  {formatearFecha(confirmando.fecha_entrada)} ·{' '}
+                  {formatearGs(confirmando.monto, { signo: 'nunca' })}
+                </span>
+              </div>
+            </div>
+          ) : null
         }
-        textoConfirmar="Confirmar"
+        textoConfirmar="Confirmar transferencia"
         procesando={procesando}
         onConfirmar={confirmar}
-        onCancelar={() => setConfirmando(null)}
+        onCancelar={() => (procesando ? undefined : setConfirmando(null))}
       />
     </>
   )

@@ -1,17 +1,39 @@
 import { supabase } from '../lib/supabase'
-import { lanzarSiError } from '../lib/errors'
+import { ErrorApp, lanzarSiError } from '../lib/errors'
 import { aMonto } from '../utils/money'
-import type { TransferenciaPotencial, UUID } from '../types/db'
+import type { ConciliacionOriginal, TransferenciaPotencial, UUID } from '../types/db'
 
 /**
  * Conciliación de transferencias.
  *
  * `buscar_transferencias_potenciales` propone pares de movimientos que podrían
- * ser una única transferencia entre cuentas propias. La confirmación siempre
- * es manual: la aplicación nunca concilia por su cuenta.
+ * ser una única transferencia entre cuentas propias. Coincidir en importe y
+ * fecha NO basta: la base exige además una señal fuerte en el texto. La
+ * confirmación siempre es manual: la aplicación nunca concilia por su cuenta.
+ *
+ * Al conciliar, la base guarda el estado original de los dos movimientos, así
+ * que la operación se puede deshacer dejándolos exactamente como estaban.
  */
 
-export const DIAS_MAX_POR_DEFECTO = 2
+/** Un día: un gasto y un ingreso más separados no se proponen. */
+export const DIAS_MAX_POR_DEFECTO = 1
+
+/**
+ * Códigos con los que las funciones de conciliación explican, en español y
+ * pensando en quien usa la aplicación, por qué no se puede seguir («alguno de
+ * los movimientos ya forma parte de una transferencia», por ejemplo). Ese
+ * mensaje es más útil que el genérico, así que se muestra tal cual.
+ */
+const CODIGOS_CON_MOTIVO = new Set(['P0001', 'P0002'])
+
+function lanzarConMotivo(error: unknown, respaldo: string): void {
+  if (!error) return
+  const err = error as { code?: string; message?: string }
+  if (err.code && CODIGOS_CON_MOTIVO.has(err.code) && err.message) {
+    throw new ErrorApp(err.message, error)
+  }
+  lanzarSiError(error, respaldo)
+}
 
 export async function buscarTransferenciasPotenciales(
   diasMax: number = DIAS_MAX_POR_DEFECTO,
@@ -27,6 +49,7 @@ export async function buscarTransferenciasPotenciales(
     monto: aMonto(fila.monto),
     diferencia_dias: Number(fila.diferencia_dias ?? 0),
     puntaje: Number(fila.puntaje ?? 0),
+    motivos: Array.isArray(fila.motivos) ? (fila.motivos as string[]) : null,
   }))
 }
 
@@ -40,26 +63,67 @@ export async function conciliarTransferencia(
     p_movimiento_entrada: movimientoEntradaId,
   })
 
-  lanzarSiError(error, 'No se pudo conciliar la transferencia.')
+  lanzarConMotivo(error, 'No se pudo conciliar la transferencia.')
   return data
+}
+
+/**
+ * RPC `revertir_conciliacion` — devuelve los dos movimientos a su estado
+ * original y marca la transferencia como cancelada.
+ *
+ * Solo sirve para transferencias creadas por conciliación que tengan copia del
+ * estado original. Para las normales se sigue usando `anular_transferencia`.
+ */
+export async function revertirConciliacion(transferenciaId: UUID): Promise<void> {
+  const { error } = await supabase.rpc('revertir_conciliacion', {
+    p_transferencia_id: transferenciaId,
+  })
+
+  lanzarConMotivo(error, 'No se pudo revertir la conciliación.')
+}
+
+export interface EstadoConciliacion {
+  /** La transferencia nació de una conciliación con copia del estado original. */
+  tieneCopia: boolean
+  /** La copia sigue sin usarse: la reversión devolvería los dos movimientos. */
+  reversible: boolean
+}
+
+const SIN_CONCILIACION: EstadoConciliacion = { tieneCopia: false, reversible: false }
+
+/**
+ * Averigua si una transferencia se puede revertir.
+ *
+ * Si la tabla de copias todavía no existe (la migración no se ejecutó), se
+ * responde que no hay copia: la pantalla sigue funcionando como antes.
+ */
+export async function obtenerEstadoConciliacion(
+  transferenciaId: UUID,
+): Promise<EstadoConciliacion> {
+  const { data, error } = await supabase
+    .from('conciliaciones_movimientos_originales')
+    .select('id, restaurado_en')
+    .eq('transferencia_id', transferenciaId)
+
+  if (error) {
+    console.warn('[Mis Finanzas] no se pudo consultar la copia de la conciliación', error)
+    return SIN_CONCILIACION
+  }
+
+  const copias = (data ?? []) as Pick<ConciliacionOriginal, 'id' | 'restaurado_en'>[]
+  return {
+    tieneCopia: copias.length > 0,
+    reversible: copias.some((c) => c.restaurado_en === null),
+  }
 }
 
 /** Motivos legibles por los que el RPC considera que el par podría ser una transferencia. */
 export function motivosDeCoincidencia(candidato: TransferenciaPotencial): string[] {
-  const motivos: string[] = ['Mismo importe en ambas cuentas']
+  // Los motivos los calcula la base junto con el puntaje: son la razón real.
+  if (candidato.motivos && candidato.motivos.length > 0) return candidato.motivos
 
-  if (candidato.diferencia_dias === 0) motivos.push('Misma fecha')
-  else if (candidato.diferencia_dias === 1) motivos.push('Diferencia de 1 día')
-  else motivos.push(`Diferencia de ${candidato.diferencia_dias} días`)
-
-  const salida = (candidato.descripcion_salida ?? '').trim().toLowerCase()
-  const entrada = (candidato.descripcion_entrada ?? '').trim().toLowerCase()
-  if (salida && entrada) {
-    const palabrasSalida = new Set(salida.split(/\s+/).filter((p) => p.length > 3))
-    const compatible = entrada.split(/\s+/).some((p) => p.length > 3 && palabrasSalida.has(p))
-    motivos.push(compatible ? 'Descripciones compatibles' : 'Descripciones distintas')
-  }
-
-  motivos.push('Cuentas propias distintas')
+  // RPC anterior a la mejora: se describe solo lo que se ve desde aquí.
+  const motivos = ['Mismo importe en cuentas propias distintas']
+  motivos.push(candidato.diferencia_dias === 0 ? 'Misma fecha' : 'Diferencia de 1 día')
   return motivos
 }

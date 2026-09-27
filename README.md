@@ -115,7 +115,8 @@ ya existen en la base de datos:
 | `editar_transferencia` | `src/services/transfersService.ts` → editar transferencia |
 | `anular_transferencia` | `src/services/transfersService.ts` → «Eliminar transferencia» |
 | `buscar_transferencias_potenciales` | `src/services/reconcileService.ts` → pantalla Conciliación |
-| `conciliar_transferencia` | `src/services/reconcileService.ts` → botón «Confirmar» |
+| `conciliar_transferencia` | `src/services/reconcileService.ts` → botón «Confirmar transferencia» |
+| `revertir_conciliacion` | `src/services/reconcileService.ts` → «Revertir conciliación» |
 | `confirmar_recurrente` | `src/services/recurringService.ts` → hoja «Confirmar» de un recurrente previsto |
 | `crear_plan_cuotas` | `src/services/installmentsService.ts` → nueva compra en cuotas |
 | `confirmar_cuota_plan` | `src/services/installmentsService.ts` → hoja «Registrar pago» de una cuota |
@@ -134,7 +135,16 @@ Reglas que respeta la aplicación:
 - Ingresos y gastos del resumen cuentan solo `estado = confirmado`.
 - El saldo de cada cuenta viene de la vista **`v_saldos_cuentas`**; no se recalcula
   descargando movimientos.
-- La conciliación nunca es automática: cada par se confirma a mano.
+- La conciliación nunca es automática: cada par se confirma a mano, y coincidir en
+  importe y fecha no basta para proponerlo.
+- Conciliar guarda antes el estado original de los dos movimientos, así que la
+  operación se deshace dejándolos exactamente como estaban.
+
+### Migraciones SQL
+
+Las funciones viven en Supabase. Cuando una mejora necesita cambiarlas, el SQL queda
+versionado en `supabase/migrations/` y hay que ejecutarlo a mano en el SQL Editor de
+Supabase: la aplicación nunca modifica el esquema por su cuenta.
 
 Las cuentas, categorías y presupuestos sí se escriben directamente en sus tablas
 (`insert`/`update`, respetando RLS). El `user_id` se obtiene siempre de Supabase Auth,

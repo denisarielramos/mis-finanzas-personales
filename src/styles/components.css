@@ -826,6 +826,43 @@ input[type='date'].control {
   font-size: 0.9375rem;
 }
 
+/* Detalle de lo que se va a hacer, antes de confirmar */
+.dialogo__detalle {
+  margin-top: var(--espacio-3);
+  padding: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  background: var(--superficie-2);
+  font-size: 0.875rem;
+}
+
+/* Las dos patas de una conciliación, una encima de la otra en el móvil */
+.confirmacion-conciliacion {
+  display: grid;
+  gap: var(--espacio-2);
+}
+
+.confirmacion-conciliacion__lado {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.confirmacion-conciliacion__rol {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
+}
+
+.confirmacion-conciliacion__flecha {
+  color: var(--texto-suave);
+  transform: rotate(90deg);
+  justify-self: center;
+}
+
 .dialogo__acciones {
   display: flex;
   gap: var(--espacio-2);
