@@ -67,16 +67,20 @@ export function TransferenciaDetallePage() {
   const reversible = conciliacion?.reversible === true
 
   /**
-   * Conciliación anterior a la mejora: no hay copia del estado original, así
-   * que eliminarla anula los dos movimientos. Se avisa antes.
+   * Conciliación anterior a la mejora: no hay copia del estado original.
+   * Eliminarla dejaría los dos movimientos anulados sin forma de
+   * reconstruirlos, así que aquí no se ofrece ninguna acción destructiva.
    */
   const conciliacionSinCopia =
     !reversible &&
     conciliacion?.tieneCopia === false &&
     (transferencia?.referencia ?? '').toUpperCase().includes('CONCILIACION')
 
+  /** Solo las transferencias normales se anulan con `anular_transferencia`. */
+  const puedeEliminar = Boolean(transferencia) && !anulada && !reversible && !conciliacionSinCopia
+
   async function eliminar() {
-    if (!transferencia || anulando) return
+    if (!transferencia || anulando || !puedeEliminar) return
     setAnulando(true)
     try {
       await anularTransferencia(transferencia.id)
@@ -193,9 +197,8 @@ export function TransferenciaDetallePage() {
             {conciliacionSinCopia && !anulada ? (
               <div style={{ marginTop: 12 }}>
                 <Mensaje tipo="aviso">
-                  Esta conciliación es anterior a la copia de seguridad del estado original, así
-                  que no se puede revertir automáticamente. Si la eliminas, los dos movimientos
-                  quedarán anulados en lugar de volver a ser un gasto y un ingreso.
+                  Esta conciliación fue creada antes del sistema de reversión segura y no contiene
+                  una copia del estado original. No puede revertirse automáticamente.
                 </Mensaje>
               </div>
             ) : null}
@@ -220,7 +223,9 @@ export function TransferenciaDetallePage() {
                   >
                     Revertir conciliación
                   </Boton>
-                ) : (
+                ) : null}
+
+                {puedeEliminar ? (
                   <Boton
                     variante="peligro"
                     bloque
@@ -229,7 +234,7 @@ export function TransferenciaDetallePage() {
                   >
                     Eliminar transferencia
                   </Boton>
-                )}
+                ) : null}
               </div>
             ) : null}
           </>
@@ -239,11 +244,7 @@ export function TransferenciaDetallePage() {
       <Dialogo
         abierto={confirmando}
         titulo="¿Eliminar esta transferencia?"
-        mensaje={
-          conciliacionSinCopia
-            ? 'Se anulará la operación completa. Esta conciliación no guarda el estado original, así que los dos movimientos quedarán anulados y no volverán a ser un gasto y un ingreso.'
-            : 'Se anulará la operación completa: tanto la salida como la entrada. No se borra del historial.'
-        }
+        mensaje="Se anulará la operación completa: tanto la salida como la entrada. No se borra del historial."
         textoConfirmar="Eliminar"
         peligroso
         procesando={anulando}

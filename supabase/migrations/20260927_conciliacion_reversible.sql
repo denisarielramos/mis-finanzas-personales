@@ -8,8 +8,10 @@
 --      transferencia.
 --   2. Reemplaza `buscar_transferencias_potenciales`: ahora exige una señal
 --      fuerte de transferencia, no solo importe y fecha.
---   3. Reemplaza `conciliar_transferencia`: valida la elegibilidad, guarda la
---      copia ANTES de tocar nada y hace todo en una sola transacción.
+--   3. Reemplaza `conciliar_transferencia`: valida la elegibilidad, vuelve a
+--      exigir la MISMA señal fuerte que la búsqueda (llamar al RPC a mano no
+--      saltea el filtro), guarda la copia ANTES de tocar nada y hace todo en
+--      una sola transacción.
 --   4. Crea `revertir_conciliacion`: deshace una conciliación devolviendo los
 --      dos movimientos exactamente a su estado anterior.
 --   5. Crea un disparador que impide anular un movimiento cuya conciliación
@@ -364,6 +366,10 @@ declare
   v_user             uuid := auth.uid();
   v_salida           public.movimientos;
   v_entrada          public.movimientos;
+  v_nombre_origen    text;
+  v_nombre_destino   text;
+  v_texto_salida     text;
+  v_texto_entrada    text;
   v_transferencia_id uuid;
   v_movimientos_ajenos integer;
 begin
@@ -435,6 +441,36 @@ begin
     raise exception 'Las fechas se llevan más de un día.' using errcode = 'P0001';
   end if;
 
+  -- La señal fuerte se vuelve a calcular aquí, con los mismos ayudantes y el
+  -- mismo texto que usa la búsqueda. Sin esto, llamar al RPC directamente
+  -- saltaría el filtro y permitiría conciliar dos movimientos que solo
+  -- coinciden en importe y fecha.
+  select nombre into v_nombre_origen
+  from public.cuentas
+  where id = v_salida.cuenta_id and user_id = v_user;
+
+  select nombre into v_nombre_destino
+  from public.cuentas
+  where id = v_entrada.cuenta_id and user_id = v_user;
+
+  if v_nombre_origen is null or v_nombre_destino is null then
+    raise exception 'Alguna de las cuentas no existe o no es tuya.' using errcode = 'P0002';
+  end if;
+
+  v_texto_salida := concat_ws(' ', v_salida.descripcion, v_salida.notas, v_salida.referencia_externa);
+  v_texto_entrada := concat_ws(' ', v_entrada.descripcion, v_entrada.notas, v_entrada.referencia_externa);
+
+  if not (
+    public.conc_tiene_vocabulario_transferencia(v_texto_salida)
+    or public.conc_tiene_vocabulario_transferencia(v_texto_entrada)
+    or public.conc_menciona_cuenta(v_texto_salida, v_nombre_destino)
+    or public.conc_menciona_cuenta(v_texto_entrada, v_nombre_origen)
+  ) then
+    raise exception
+      'Los movimientos ya no cumplen los criterios seguros para ser conciliados como transferencia.'
+      using errcode = 'P0001';
+  end if;
+
   insert into public.transferencias (
     user_id, cuenta_origen_id, cuenta_destino_id, monto, fecha, estado, referencia
   )
@@ -499,7 +535,7 @@ end;
 $$;
 
 comment on function public.conciliar_transferencia(uuid, uuid) is
-  'Convierte un gasto y un ingreso en una transferencia, guardando antes el estado original de ambos para poder revertirlo. Solo se llama tras confirmación manual.';
+  'Convierte un gasto y un ingreso en una transferencia, guardando antes el estado original de ambos para poder revertirlo. Revalida la misma señal fuerte que la búsqueda, así que llamarla directamente no saltea el filtro. Solo se llama tras confirmación manual.';
 
 revoke all on function public.conciliar_transferencia(uuid, uuid) from public, anon;
 grant execute on function public.conciliar_transferencia(uuid, uuid) to authenticated;
