@@ -137,6 +137,13 @@
   padding: var(--espacio-1) 0;
 }
 
+/* El mismo enlace cuando la acción no navega («Ver más» del gráfico) */
+button.seccion__enlace {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 /* --------------------------- Barra inferior ---------------------------- */
 
 .barra-inferior {
