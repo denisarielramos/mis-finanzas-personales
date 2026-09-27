@@ -291,6 +291,19 @@ export function PlanDetallePage() {
               </div>
             </div>
 
+            {/* Antes de la lista: en un plan de 36 cuotas, al final quedaba
+                demasiado lejos. */}
+            <div className="acciones-pila">
+              <Boton
+                variante="secundario"
+                bloque
+                icono={<Pencil size={17} aria-hidden="true" />}
+                onClick={() => navegar(`/cuotas/${resumen.id}/editar`)}
+              >
+                Editar financiación
+              </Boton>
+            </div>
+
             <section className="seccion" aria-label="Cuotas del plan">
               <div className="seccion__cabecera">
                 <h2 className="seccion__titulo">Cuotas</h2>
@@ -377,16 +390,8 @@ export function PlanDetallePage() {
               </ul>
             </section>
 
+            {/* Al final quedan solo las acciones de estado. */}
             <div className="acciones-pila">
-              <Boton
-                variante="secundario"
-                bloque
-                icono={<Pencil size={17} aria-hidden="true" />}
-                onClick={() => navegar(`/cuotas/${resumen.id}/editar`)}
-              >
-                Editar financiación
-              </Boton>
-
               {puedeArchivar ? (
                 <Boton
                   variante="secundario"
