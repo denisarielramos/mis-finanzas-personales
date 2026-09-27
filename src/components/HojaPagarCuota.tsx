@@ -7,11 +7,15 @@ import { Hoja } from './ui/Hoja'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { useAvisos } from '../hooks/useToast'
 import { useConexion } from '../hooks/useConexion'
-import { confirmarCuotaPlan } from '../services/installmentsService'
-import type { FechaISO, MontoPYG, UUID } from '../types/db'
+import {
+  confirmarCuotaPlan,
+  obtenerTipoMontoDeCuota,
+} from '../services/installmentsService'
+import type { FechaISO, MontoPYG, TipoMontoCuota, UUID } from '../types/db'
 import { formatearFecha, hoyISO } from '../utils/date'
-import { formatearGs, parsearEntradaMonto } from '../utils/money'
+import { parsearEntradaMonto } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
+import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /** Cuota pendiente lista para registrarse como pagada. */
 export interface CuotaPorPagar {
@@ -22,6 +26,11 @@ export interface CuotaPorPagar {
   monto: MontoPYG
   fechaVencimiento: FechaISO
   cuentaId: UUID | null
+  /**
+   * Modalidad del plan. Si no se conoce (por ejemplo, al abrir la hoja desde
+   * Inicio) se consulta al abrirla; mientras tanto se trata como fija.
+   */
+  tipoMonto?: TipoMontoCuota
 }
 
 interface Props {
@@ -38,9 +47,11 @@ interface Props {
  */
 export function HojaPagarCuota({ cuota, onCerrar, onPagada }: Props) {
   const { cuentas, refrescarSaldos } = useCatalogo()
+  const { monto: formatearMonto } = usePrivacidad()
   const avisos = useAvisos()
   const enLinea = useConexion()
 
+  const [tipoMonto, setTipoMonto] = useState<TipoMontoCuota>('fijo')
   const [monto, setMonto] = useState('')
   const [fecha, setFecha] = useState(hoyISO)
   const [cuentaId, setCuentaId] = useState<UUID | ''>('')
@@ -51,12 +62,35 @@ export function HojaPagarCuota({ cuota, onCerrar, onPagada }: Props) {
 
   useEffect(() => {
     if (!cuota) return
+    setTipoMonto(cuota.tipoMonto ?? 'fijo')
     setMonto(String(cuota.monto))
     setFecha(hoyISO())
     setCuentaId(cuota.cuentaId ?? '')
     setDescripcion('')
     setNotas('')
     setErrores({})
+  }, [cuota])
+
+  /**
+   * Cuando la hoja se abre desde una previsión, la modalidad del plan no viene
+   * con la cuota: se consulta aparte. Hasta que llega se mantiene bloqueada,
+   * que es lo conservador.
+   */
+  useEffect(() => {
+    if (!cuota || cuota.tipoMonto) return
+    let vigente = true
+
+    obtenerTipoMontoDeCuota(cuota.id)
+      .then((tipo) => {
+        if (vigente) setTipoMonto(tipo)
+      })
+      .catch(() => {
+        /* Se queda en «fijo». */
+      })
+
+    return () => {
+      vigente = false
+    }
   }, [cuota])
 
   async function pagar(e: FormEvent) {
@@ -68,8 +102,11 @@ export function HojaPagarCuota({ cuota, onCerrar, onPagada }: Props) {
       return
     }
 
+    // En una cuota fija el importe es el contractual: no se toma del formulario.
+    const montoReal = esAproximada ? parsearEntradaMonto(monto) : cuota.monto
+
     const nuevos: Record<string, string> = {}
-    if (parsearEntradaMonto(monto) <= 0) nuevos.monto = 'Escribe un monto mayor que cero.'
+    if (montoReal <= 0) nuevos.monto = 'Escribe un monto mayor que cero.'
     if (!cuentaId) nuevos.cuenta = 'Elige una cuenta.'
     if (!fecha) nuevos.fecha = 'Elige la fecha de pago.'
     setErrores(nuevos)
@@ -80,7 +117,7 @@ export function HojaPagarCuota({ cuota, onCerrar, onPagada }: Props) {
       await confirmarCuotaPlan({
         cuotaId: cuota.id,
         cuentaId: cuentaId as UUID,
-        montoReal: parsearEntradaMonto(monto),
+        montoReal,
         fechaPago: fecha,
         descripcion: descripcion || null,
         notas: notas || null,
@@ -99,6 +136,7 @@ export function HojaPagarCuota({ cuota, onCerrar, onPagada }: Props) {
 
   const etiquetaCuota =
     cuota?.numero && cuota.totalCuotas ? `Cuota ${cuota.numero}/${cuota.totalCuotas}` : 'Cuota'
+  const esAproximada = tipoMonto === 'aproximado'
 
   return (
     <Hoja
@@ -119,8 +157,10 @@ export function HojaPagarCuota({ cuota, onCerrar, onPagada }: Props) {
                 <span className="datos__valor">{etiquetaCuota}</span>
               </div>
               <div className="datos__fila">
-                <span className="datos__clave">Monto esperado</span>
-                <span className="datos__valor numero">{formatearGs(cuota.monto)}</span>
+                <span className="datos__clave">
+                  {esAproximada ? 'Monto estimado' : 'Monto de cuota'}
+                </span>
+                <span className="datos__valor numero">{formatearMonto(cuota.monto)}</span>
               </div>
               <div className="datos__fila">
                 <span className="datos__clave">Vencimiento</span>
@@ -131,9 +171,19 @@ export function HojaPagarCuota({ cuota, onCerrar, onPagada }: Props) {
             </div>
           </div>
 
-          <Campo etiqueta="Monto realmente pagado" error={errores.monto}>
-            {(props) => <InputMonto {...props} valor={monto} onChange={setMonto} />}
-          </Campo>
+          {esAproximada ? (
+            <Campo
+              etiqueta="Monto realmente pagado"
+              error={errores.monto}
+              ayuda="El estimado de la cuota no cambia: solo se registra lo que se debitó."
+            >
+              {(props) => <InputMonto {...props} valor={monto} onChange={setMonto} />}
+            </Campo>
+          ) : (
+            <p className="campo__ayuda">
+              Es una cuota fija: se registrará exactamente el monto de la cuota.
+            </p>
+          )}
 
           <Campo etiqueta="Fecha de pago" error={errores.fecha}>
             {(props) => (

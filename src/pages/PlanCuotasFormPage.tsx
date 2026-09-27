@@ -11,8 +11,8 @@ import { Mensaje } from '../components/ui/Estados'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { useAvisos } from '../hooks/useToast'
 import { useConexion } from '../hooks/useConexion'
-import { crearPlanCuotas } from '../services/installmentsService'
-import type { UUID } from '../types/db'
+import { crearPlanCuotas, editarPlanCuotas } from '../services/installmentsService'
+import { AYUDA_TIPO_MONTO, type TipoMontoCuota, type UUID } from '../types/db'
 import { formatearFecha, hoyISO, sumarDias, sumarMeses } from '../utils/date'
 import { formatearGs, parsearEntradaMonto } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
@@ -22,6 +22,11 @@ type ModoPrimera = 'fecha' | 'dias'
 const OPCIONES_PRIMERA: { valor: ModoPrimera; etiqueta: string }[] = [
   { valor: 'fecha', etiqueta: 'Fecha exacta' },
   { valor: 'dias', etiqueta: 'En X días' },
+]
+
+const OPCIONES_TIPO: { valor: TipoMontoCuota; etiqueta: string }[] = [
+  { valor: 'fijo', etiqueta: 'Cuota fija' },
+  { valor: 'aproximado', etiqueta: 'Cuota aproximada' },
 ]
 
 /**
@@ -40,6 +45,7 @@ export function PlanCuotasFormPage() {
   const [nombre, setNombre] = useState('')
   // Se pide el monto de CADA cuota; el total se deduce, nunca se escribe.
   const [montoCuota, setMontoCuota] = useState('')
+  const [tipoMonto, setTipoMonto] = useState<TipoMontoCuota>('fijo')
   const [cantidadCuotas, setCantidadCuotas] = useState('12')
   const [fechaCompra, setFechaCompra] = useState(hoyISO)
   const [modoPrimera, setModoPrimera] = useState<ModoPrimera>('fecha')
@@ -126,10 +132,31 @@ export function PlanCuotasFormPage() {
         notas: notas || null,
       })
 
-      avisos.exito('Plan de cuotas creado correctamente.')
-
       // El RPC suele devolver el id del plan creado; si llega, se abre.
       const id = typeof resultado === 'string' ? resultado : null
+
+      // `crear_plan_cuotas` no conoce la modalidad: se marca justo después,
+      // con el RPC de edición, sin tocar cuotas ni importes.
+      if (id && tipoMonto === 'aproximado') {
+        await editarPlanCuotas({
+          planId: id,
+          nombre,
+          proveedor: proveedor || null,
+          descripcion: descripcion || null,
+          notas: notas || null,
+          categoriaId: categoriaId || null,
+          cuentaPreferidaId: cuentaPreferidaId || null,
+          tipoMonto,
+          montoCuota: null,
+        })
+      }
+
+      if (!id && tipoMonto === 'aproximado') {
+        avisos.info('Plan creado. Marca «Cuota aproximada» desde «Editar financiación».')
+      } else {
+        avisos.exito('Plan de cuotas creado correctamente.')
+      }
+
       navegar(id ? `/cuotas/${id}` : '/cuotas')
     } catch (e) {
       avisos.error(textoDeExcepcion(e, 'No se pudo crear el plan de cuotas.'))
@@ -179,8 +206,23 @@ export function PlanCuotasFormPage() {
             )}
           </Campo>
 
+          <div className="campo">
+            <span className="campo__etiqueta">Tipo de cuota</span>
+            <Segmentos
+              opciones={OPCIONES_TIPO}
+              valor={tipoMonto}
+              onCambio={setTipoMonto}
+              etiquetaAccesible="Tipo de cuota"
+            />
+            <span className="campo__ayuda">{AYUDA_TIPO_MONTO[tipoMonto]}</span>
+          </div>
+
           <Campo
-            etiqueta="Monto de cada cuota"
+            etiqueta={
+              tipoMonto === 'aproximado'
+                ? 'Monto estimado de cada cuota'
+                : 'Monto de cada cuota'
+            }
             error={errores.monto}
             ayuda="El total comprometido se calcula solo."
           >
@@ -340,7 +382,11 @@ export function PlanCuotasFormPage() {
               </p>
 
               <p className="campo__etiqueta" style={{ marginTop: 10 }}>
-                {previsualizacion.mensual ? 'Cuota mensual' : 'Monto de cada cuota'}
+                {tipoMonto === 'aproximado'
+                  ? 'Cuota estimada'
+                  : previsualizacion.mensual
+                    ? 'Cuota mensual'
+                    : 'Monto de cada cuota'}
               </p>
               <p className="previsualizacion__cuota numero">{formatearGs(cuota)}</p>
 

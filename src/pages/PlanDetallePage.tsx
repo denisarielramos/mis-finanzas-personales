@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Ban, Undo2 } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Archive, ArchiveRestore, Ban, Pencil, Undo2 } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
 import { Dialogo } from '../components/ui/Dialogo'
@@ -10,14 +10,16 @@ import { useCatalogo } from '../hooks/useCatalogo'
 import { useCarga } from '../hooks/useCarga'
 import { useAvisos } from '../hooks/useToast'
 import {
+  archivarPlanCuotas,
   cancelarPlanCuotas,
+  desarchivarPlanCuotas,
   estaVencida,
   listarCuotas,
   obtenerPlan,
   obtenerPlanResumen,
   revertirPagoCuota,
 } from '../services/installmentsService'
-import { ETIQUETA_ESTADO_PLAN, type CuotaPlan } from '../types/db'
+import { ETIQUETA_ESTADO_PLAN, ETIQUETA_TIPO_MONTO, type CuotaPlan } from '../types/db'
 import { formatearFecha, hoyISO } from '../utils/date'
 import { porcentaje } from '../utils/money'
 import { textoDeExcepcion } from '../lib/errors'
@@ -32,6 +34,7 @@ import { usePrivacidad } from '../hooks/usePrivacidad'
 export function PlanDetallePage() {
   const { monto } = usePrivacidad()
   const { id = '' } = useParams()
+  const navegar = useNavigate()
   const avisos = useAvisos()
   const { categoriaPorId, cuentaPorId, refrescarSaldos } = useCatalogo()
 
@@ -41,8 +44,9 @@ export function PlanDetallePage() {
   const [cancelando, setCancelando] = useState(false)
   const [confirmandoCancelar, setConfirmandoCancelar] = useState(false)
   const [revirtiendo, setRevirtiendo] = useState(false)
+  const [archivando, setArchivando] = useState(false)
 
-  const { datos, cargando, error } = useCarga(
+  const { datos, cargando, error, recargar } = useCarga(
     async () => {
       const [resumen, plan, cuotas] = await Promise.all([
         obtenerPlanResumen(id),
@@ -72,7 +76,12 @@ export function PlanDetallePage() {
   }, [cuotas, resumen])
 
   const pct = resumen ? porcentaje(resumen.cuotas_pagadas, resumen.cantidad_cuotas) : 0
+  const esAproximada = resumen?.tipo_monto === 'aproximado'
+  /** Solo se archiva lo terminado: la base rechaza archivar una activa. */
+  const puedeArchivar =
+    resumen !== null && !resumen.archivado && resumen.estado !== 'activo'
 
+  /** Revalidación silenciosa: los datos anteriores siguen en pantalla. */
   function refrescar() {
     setVersion((v) => v + 1)
   }
@@ -108,6 +117,34 @@ export function PlanDetallePage() {
     }
   }
 
+  async function archivar() {
+    if (!plan || archivando) return
+    setArchivando(true)
+    try {
+      await archivarPlanCuotas(plan.id)
+      avisos.exito('Financiación archivada.')
+      await recargar()
+    } catch (e) {
+      avisos.error(textoDeExcepcion(e, 'No se pudo archivar la financiación.'))
+    } finally {
+      setArchivando(false)
+    }
+  }
+
+  async function desarchivar() {
+    if (!plan || archivando) return
+    setArchivando(true)
+    try {
+      await desarchivarPlanCuotas(plan.id)
+      avisos.exito('Financiación devuelta al listado.')
+      await recargar()
+    } catch (e) {
+      avisos.error(textoDeExcepcion(e, 'No se pudo desarchivar la financiación.'))
+    } finally {
+      setArchivando(false)
+    }
+  }
+
   function etiquetaEstadoCuota(cuota: CuotaPlan) {
     if (cuota.estado === 'pagada') return { texto: 'Pagada', clase: 'etiqueta--positivo' }
     if (cuota.estado === 'cancelada') return { texto: 'Cancelada', clase: '' }
@@ -140,15 +177,20 @@ export function PlanDetallePage() {
                   ) : null}
                   <p className="plan__nombre">{resumen.nombre}</p>
                 </div>
-                <span
-                  className={`etiqueta ${resumen.estado === 'activo' ? 'etiqueta--info' : ''}`}
-                >
-                  {ETIQUETA_ESTADO_PLAN[resumen.estado]}
+                <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {resumen.archivado ? <span className="etiqueta">Archivada</span> : null}
+                  <span
+                    className={`etiqueta ${resumen.estado === 'activo' ? 'etiqueta--info' : ''}`}
+                  >
+                    {ETIQUETA_ESTADO_PLAN[resumen.estado]}
+                  </span>
                 </span>
               </div>
 
               <div className="plan__cifras">
-                <span className="plan__pendiente numero">Cuota: {monto(montoCuota)}</span>
+                <span className="plan__pendiente numero">
+                  {esAproximada ? 'Cuota estimada' : 'Cuota'}: {monto(montoCuota)}
+                </span>
                 <span className="texto-suave numero">
                   {resumen.cuotas_pagadas} de {resumen.cantidad_cuotas} pagadas
                 </span>
@@ -168,7 +210,8 @@ export function PlanDetallePage() {
 
               <div className="plan__pie">
                 <span className="numero">
-                  Pendiente: {monto(resumen.saldo_pendiente)}
+                  {esAproximada ? 'Pendiente estimado' : 'Pendiente'}:{' '}
+                  {monto(resumen.saldo_pendiente)}
                 </span>
                 <span className="numero">{pct}%</span>
               </div>
@@ -177,8 +220,14 @@ export function PlanDetallePage() {
             <div className="tarjeta" style={{ marginTop: 12 }}>
               <div className="datos">
                 <div className="datos__fila">
-                  <span className="datos__clave">Monto de cuota</span>
+                  <span className="datos__clave">
+                    {esAproximada ? 'Cuota estimada' : 'Monto de cuota'}
+                  </span>
                   <span className="datos__valor numero">{monto(montoCuota)}</span>
+                </div>
+                <div className="datos__fila">
+                  <span className="datos__clave">Tipo de cuota</span>
+                  <span className="datos__valor">{ETIQUETA_TIPO_MONTO[resumen.tipo_monto]}</span>
                 </div>
                 <div className="datos__fila">
                   <span className="datos__clave">Cuotas</span>
@@ -192,7 +241,9 @@ export function PlanDetallePage() {
                   </span>
                 </div>
                 <div className="datos__fila">
-                  <span className="datos__clave">Pendiente</span>
+                  <span className="datos__clave">
+                    {esAproximada ? 'Proyección pendiente' : 'Pendiente'}
+                  </span>
                   <span className="datos__valor numero">
                     {monto(resumen.saldo_pendiente)}
                   </span>
@@ -248,10 +299,14 @@ export function PlanDetallePage() {
               <ul className="lista">
                 {cuotas.map((cuota) => {
                   const estado = etiquetaEstadoCuota(cuota)
-                  const montoMostrado =
+                  // Una cuota pagada muestra lo REAL; una pendiente, lo programado.
+                  const pagadaConImporte =
                     cuota.estado === 'pagada' && cuota.monto_pagado !== null
-                      ? cuota.monto_pagado
-                      : cuota.monto_programado
+                  const montoMostrado = pagadaConImporte
+                    ? (cuota.monto_pagado as number)
+                    : cuota.monto_programado
+                  const difiereDelEstimado =
+                    pagadaConImporte && cuota.monto_pagado !== cuota.monto_programado
 
                   return (
                     <li className="fila-con-accion" key={cuota.id}>
@@ -269,8 +324,18 @@ export function PlanDetallePage() {
                               <span className="numero"> el {formatearFecha(cuota.fecha_pago)}</span>
                             ) : null}
                           </span>
+                          {difiereDelEstimado ? (
+                            <span className="lista__momento numero">
+                              Estimado: {monto(cuota.monto_programado)}
+                            </span>
+                          ) : null}
                         </span>
-                        <span className="lista__monto numero">{monto(montoMostrado)}</span>
+                        <span className="lista__monto numero">
+                          {monto(montoMostrado)}
+                          {difiereDelEstimado ? (
+                            <span className="lista__periodo">pagado</span>
+                          ) : null}
+                        </span>
                       </div>
 
                       {cuota.estado === 'pendiente' ? (
@@ -287,6 +352,7 @@ export function PlanDetallePage() {
                                 monto: cuota.monto_programado,
                                 fechaVencimiento: cuota.fecha_vencimiento,
                                 cuentaId: resumen.cuenta_preferida_id,
+                                tipoMonto: resumen.tipo_monto,
                               })
                             }
                           >
@@ -311,8 +377,41 @@ export function PlanDetallePage() {
               </ul>
             </section>
 
-            {resumen.estado === 'activo' ? (
-              <div className="acciones-pila">
+            <div className="acciones-pila">
+              <Boton
+                variante="secundario"
+                bloque
+                icono={<Pencil size={17} aria-hidden="true" />}
+                onClick={() => navegar(`/cuotas/${resumen.id}/editar`)}
+              >
+                Editar financiación
+              </Boton>
+
+              {puedeArchivar ? (
+                <Boton
+                  variante="secundario"
+                  bloque
+                  cargando={archivando}
+                  icono={<Archive size={17} aria-hidden="true" />}
+                  onClick={archivar}
+                >
+                  Archivar financiación
+                </Boton>
+              ) : null}
+
+              {resumen.archivado ? (
+                <Boton
+                  variante="secundario"
+                  bloque
+                  cargando={archivando}
+                  icono={<ArchiveRestore size={17} aria-hidden="true" />}
+                  onClick={desarchivar}
+                >
+                  Desarchivar
+                </Boton>
+              ) : null}
+
+              {resumen.estado === 'activo' ? (
                 <Boton
                   variante="peligro"
                   bloque
@@ -321,12 +420,13 @@ export function PlanDetallePage() {
                 >
                   Cancelar financiación
                 </Boton>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
             <p className="campo__ayuda" style={{ marginTop: 16 }}>
-              Las cuotas pendientes no afectan a tus saldos. Al registrar un pago se crea el gasto
-              real en la cuenta elegida.
+              {esAproximada
+                ? 'El importe de las cuotas es una estimación: al registrar cada pago se guarda lo que realmente se debitó, y el estimado de las demás cuotas no cambia.'
+                : 'Las cuotas pendientes no afectan a tus saldos. Al registrar un pago se crea el gasto real en la cuenta elegida.'}
             </p>
           </>
         )}

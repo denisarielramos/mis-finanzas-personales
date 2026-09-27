@@ -122,6 +122,9 @@ ya existen en la base de datos:
 | `confirmar_cuota_plan` | `src/services/installmentsService.ts` → hoja «Registrar pago» de una cuota |
 | `revertir_pago_cuota` | `src/services/installmentsService.ts` → «Revertir pago» |
 | `cancelar_plan_cuotas` | `src/services/installmentsService.ts` → «Cancelar financiación» |
+| `editar_plan_cuotas` | `src/services/installmentsService.ts` → «Editar financiación» |
+| `archivar_plan_cuotas` | `src/services/installmentsService.ts` → «Archivar financiación» |
+| `desarchivar_plan_cuotas` | `src/services/installmentsService.ts` → «Desarchivar» |
 
 Reglas que respeta la aplicación:
 
@@ -139,6 +142,13 @@ Reglas que respeta la aplicación:
   importe y fecha no basta para proponerlo.
 - Conciliar guarda antes el estado original de los dos movimientos, así que la
   operación se deshace dejándolos exactamente como estaban.
+- Una financiación puede tener cuotas **fijas** (importe contractual, bloqueado al
+  pagar) o **aproximadas** (el programado es una estimación y al pagar se registra
+  lo que realmente se debitó, sin cambiar el estimado de las demás).
+- Editar una financiación solo cambia el importe de las cuotas **pendientes**:
+  las pagadas y sus movimientos no se tocan nunca.
+- Archivar una financiación es solo visibilidad: no cambia su estado, sus cuotas,
+  sus pagos ni ningún saldo, y solo se permite si está completada o cancelada.
 
 ### Migraciones SQL
 

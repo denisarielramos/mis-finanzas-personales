@@ -251,6 +251,25 @@ export const ETIQUETA_ESTADO_PLAN: Record<EstadoPlanCuotas, string> = {
   cancelado: 'Cancelado',
 }
 
+/**
+ * Modalidad del importe de las cuotas (`planes_cuotas.tipo_monto`).
+ *
+ * `fijo`: el importe es contractual y no se toca al pagar.
+ * `aproximado`: el programado es una estimación (por ejemplo, una obligación
+ * en dólares) y al pagar se registra lo que realmente se debitó.
+ */
+export type TipoMontoCuota = 'fijo' | 'aproximado'
+
+export const ETIQUETA_TIPO_MONTO: Record<TipoMontoCuota, string> = {
+  fijo: 'Cuota fija',
+  aproximado: 'Cuota aproximada',
+}
+
+export const AYUDA_TIPO_MONTO: Record<TipoMontoCuota, string> = {
+  fijo: 'El monto será siempre el mismo.',
+  aproximado: 'El monto puede variar al momento de pagar.',
+}
+
 /** Fila de `public.planes_cuotas`. */
 export interface PlanCuotas {
   id: UUID
@@ -266,6 +285,11 @@ export interface PlanCuotas {
   fecha_primera_cuota: FechaISO
   frecuencia_meses: number
   estado: EstadoPlanCuotas
+  /** Modalidad del importe. Los planes anteriores a la mejora son `fijo`. */
+  tipo_monto: TipoMontoCuota
+  /** Fuera del listado normal. Es independiente del estado. */
+  archivado: boolean
+  archivado_en: string | null
   notas: string | null
   created_at: string | null
   updated_at: string | null
@@ -286,9 +310,14 @@ export interface PlanCuotasResumen {
   fecha_primera_cuota: FechaISO
   frecuencia_meses: number
   estado: EstadoPlanCuotas
+  tipo_monto: TipoMontoCuota
+  archivado: boolean
+  archivado_en: string | null
   cuotas_pagadas: number
-  cuotas_pendientes: number
+  /** Suma REAL de lo pagado en las cuotas pagadas. */
   monto_pagado: MontoPYG
+  cuotas_pendientes: number
+  /** Suma PROGRAMADA de las cuotas pendientes. En un plan aproximado es una proyección. */
   saldo_pendiente: MontoPYG
   proxima_cuota: FechaISO | null
 }

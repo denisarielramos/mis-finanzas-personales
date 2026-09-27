@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, CreditCard, Plus } from 'lucide-react'
+import { Archive, ChevronRight, CreditCard, Plus } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { Boton } from '../components/ui/Boton'
 import { EsqueletoLista, EstadoVacio, Mensaje } from '../components/ui/Estados'
@@ -38,8 +38,11 @@ export function CuotasPage() {
 
   const planes = useMemo(() => datos?.planes ?? [], [datos])
   const proximas = datos?.proximas
-  const activos = useMemo(() => planes.filter((p) => p.estado === 'activo'), [planes])
-  const historial = useMemo(() => planes.filter((p) => p.estado !== 'activo'), [planes])
+  // Archivar es solo visibilidad: lo archivado sale del listado normal.
+  const visibles = useMemo(() => planes.filter((p) => !p.archivado), [planes])
+  const activos = useMemo(() => visibles.filter((p) => p.estado === 'activo'), [visibles])
+  const finalizados = useMemo(() => visibles.filter((p) => p.estado !== 'activo'), [visibles])
+  const archivados = useMemo(() => planes.filter((p) => p.archivado), [planes])
   const deuda = useMemo(() => deudaPendiente(planes), [planes])
 
   function tarjetaPlan(plan: PlanCuotasResumen) {
@@ -51,6 +54,7 @@ export function CuotasPage() {
     const montoCuota =
       proxima?.monto_programado ??
       (plan.cantidad_cuotas > 0 ? Math.round(plan.monto_total / plan.cantidad_cuotas) : 0)
+    const esAproximada = plan.tipo_monto === 'aproximado'
 
     return (
       <button
@@ -75,7 +79,9 @@ export function CuotasPage() {
         </div>
 
         <div className="plan__cifras">
-          <span className="plan__pendiente numero">Cuota: {monto(montoCuota)}</span>
+          <span className="plan__pendiente numero">
+            {esAproximada ? 'Cuota estimada' : 'Cuota'}: {monto(montoCuota)}
+          </span>
           <span className="texto-suave numero">
             {plan.cuotas_pagadas} de {plan.cantidad_cuotas} pagadas
           </span>
@@ -94,7 +100,9 @@ export function CuotasPage() {
         </div>
 
         <div className="plan__pie">
-          <span className="numero">Pendiente: {monto(plan.saldo_pendiente)}</span>
+          <span className="numero">
+            {esAproximada ? 'Pendiente estimado' : 'Pendiente'}: {monto(plan.saldo_pendiente)}
+          </span>
           <span>
             {plan.estado === 'activo' && fechaProxima ? (
               <>
@@ -116,14 +124,25 @@ export function CuotasPage() {
         titulo="Cuotas"
         volver="/mas"
         acciones={
-          <button
-            type="button"
-            className="boton-icono"
-            aria-label="Nueva compra en cuotas"
-            onClick={() => navegar('/cuotas/nueva')}
-          >
-            <Plus size={20} aria-hidden="true" />
-          </button>
+          <>
+            <button
+              type="button"
+              className="boton-icono boton-icono--plano"
+              aria-label="Financiaciones archivadas"
+              title="Financiaciones archivadas"
+              onClick={() => navegar('/cuotas/archivadas')}
+            >
+              <Archive size={20} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="boton-icono"
+              aria-label="Nueva compra en cuotas"
+              onClick={() => navegar('/cuotas/nueva')}
+            >
+              <Plus size={20} aria-hidden="true" />
+            </button>
+          </>
         }
       />
 
@@ -147,7 +166,7 @@ export function CuotasPage() {
         <section className="seccion" aria-label="Financiaciones activas">
           {cargando ? (
             <EsqueletoLista filas={2} />
-          ) : planes.length === 0 ? (
+          ) : visibles.length === 0 ? (
             <EstadoVacio
               titulo="Todavía no tienes compras en cuotas."
               texto="Registra una financiación para seguir cuánto falta por pagar."
@@ -175,18 +194,32 @@ export function CuotasPage() {
           )}
         </section>
 
-        {historial.length > 0 ? (
-          <section className="seccion" aria-label="Historial de financiaciones">
+        {finalizados.length > 0 ? (
+          <section className="seccion" aria-label="Financiaciones finalizadas">
             <div className="seccion__cabecera">
-              <h2 className="seccion__titulo">Historial</h2>
+              <h2 className="seccion__titulo">Finalizadas</h2>
+              <span className="campo__ayuda">Completadas y canceladas</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {historial.map(tarjetaPlan)}
+              {finalizados.map(tarjetaPlan)}
             </div>
           </section>
         ) : null}
 
-        {planes.length > 0 ? (
+        {archivados.length > 0 ? (
+          <div style={{ marginTop: 16 }}>
+            <Boton
+              variante="secundario"
+              bloque
+              icono={<Archive size={17} aria-hidden="true" />}
+              onClick={() => navegar('/cuotas/archivadas')}
+            >
+              Ver {archivados.length} {archivados.length === 1 ? 'archivada' : 'archivadas'}
+            </Boton>
+          </div>
+        ) : null}
+
+        {visibles.length > 0 ? (
           <div style={{ marginTop: 20 }}>
             <Boton variante="secundario" bloque onClick={() => navegar('/cuotas/nueva')}>
               Nueva compra en cuotas
