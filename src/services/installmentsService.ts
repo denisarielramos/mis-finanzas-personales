@@ -204,11 +204,14 @@ export interface DatosPlanCuotas {
   frecuenciaMeses: number
   descripcion: string | null
   notas: string | null
+  tipoMonto: TipoMontoCuota
 }
 
 /**
  * RPC `crear_plan_cuotas`.
- * La base genera todas las cuotas: el frontend no las crea.
+ *
+ * La base genera todas las cuotas y guarda la modalidad en la misma
+ * transacción: el frontend no crea cuotas ni corrige el plan después.
  */
 export async function crearPlanCuotas(datos: DatosPlanCuotas): Promise<unknown> {
   const { data, error } = await supabase.rpc('crear_plan_cuotas', {
@@ -223,9 +226,10 @@ export async function crearPlanCuotas(datos: DatosPlanCuotas): Promise<unknown> 
     p_frecuencia_meses: datos.frecuenciaMeses,
     p_descripcion: datos.descripcion?.trim() || null,
     p_notas: datos.notas?.trim() || null,
+    p_tipo_monto: datos.tipoMonto,
   })
 
-  lanzarSiError(error, 'No se pudo crear el plan de cuotas.')
+  lanzarConMotivo(error, 'No se pudo crear el plan de cuotas.')
   return data
 }
 

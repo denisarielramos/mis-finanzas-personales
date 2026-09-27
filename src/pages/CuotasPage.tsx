@@ -44,6 +44,14 @@ export function CuotasPage() {
   const finalizados = useMemo(() => visibles.filter((p) => p.estado !== 'activo'), [visibles])
   const archivados = useMemo(() => planes.filter((p) => p.archivado), [planes])
   const deuda = useMemo(() => deudaPendiente(planes), [planes])
+  /**
+   * Con alguna financiación aproximada en marcha, el total no es una deuda
+   * exacta: parte es proyección. El cálculo no cambia, solo cómo se nombra.
+   */
+  const hayAproximadas = useMemo(
+    () => activos.some((p) => p.tipo_monto === 'aproximado'),
+    [activos],
+  )
 
   function tarjetaPlan(plan: PlanCuotasResumen) {
     const pct = porcentaje(plan.cuotas_pagadas, plan.cantidad_cuotas)
@@ -148,12 +156,15 @@ export function CuotasPage() {
 
       <div className="contenedor">
         <div className="tarjeta tarjeta--oscura patrimonio">
-          <p className="patrimonio__etiqueta">Deuda pendiente total</p>
+          <p className="patrimonio__etiqueta">
+            {hayAproximadas ? 'Deuda / proyección pendiente' : 'Deuda pendiente total'}
+          </p>
           <p className="patrimonio__monto numero">{cargando ? '—' : monto(deuda)}</p>
           <p className="patrimonio__pie">
             {activos.length === 1
               ? '1 financiación activa'
               : `${activos.length} financiaciones activas`}
+            {hayAproximadas ? ' · incluye cuotas estimadas' : ''}
           </p>
         </div>
 

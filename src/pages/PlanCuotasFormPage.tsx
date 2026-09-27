@@ -11,7 +11,7 @@ import { Mensaje } from '../components/ui/Estados'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { useAvisos } from '../hooks/useToast'
 import { useConexion } from '../hooks/useConexion'
-import { crearPlanCuotas, editarPlanCuotas } from '../services/installmentsService'
+import { crearPlanCuotas } from '../services/installmentsService'
 import { AYUDA_TIPO_MONTO, type TipoMontoCuota, type UUID } from '../types/db'
 import { formatearFecha, hoyISO, sumarDias, sumarMeses } from '../utils/date'
 import { formatearGs, parsearEntradaMonto } from '../utils/money'
@@ -130,33 +130,15 @@ export function PlanCuotasFormPage() {
         frecuenciaMeses: frecuencia,
         descripcion: descripcion || null,
         notas: notas || null,
+        // La modalidad viaja en la misma llamada: el plan nace fijo o
+        // aproximado dentro de la transacción que crea sus cuotas.
+        tipoMonto,
       })
 
-      // El RPC suele devolver el id del plan creado; si llega, se abre.
+      avisos.exito('Plan de cuotas creado correctamente.')
+
+      // El RPC devuelve el id del plan creado; si llega, se abre.
       const id = typeof resultado === 'string' ? resultado : null
-
-      // `crear_plan_cuotas` no conoce la modalidad: se marca justo después,
-      // con el RPC de edición, sin tocar cuotas ni importes.
-      if (id && tipoMonto === 'aproximado') {
-        await editarPlanCuotas({
-          planId: id,
-          nombre,
-          proveedor: proveedor || null,
-          descripcion: descripcion || null,
-          notas: notas || null,
-          categoriaId: categoriaId || null,
-          cuentaPreferidaId: cuentaPreferidaId || null,
-          tipoMonto,
-          montoCuota: null,
-        })
-      }
-
-      if (!id && tipoMonto === 'aproximado') {
-        avisos.info('Plan creado. Marca «Cuota aproximada» desde «Editar financiación».')
-      } else {
-        avisos.exito('Plan de cuotas creado correctamente.')
-      }
-
       navegar(id ? `/cuotas/${id}` : '/cuotas')
     } catch (e) {
       avisos.error(textoDeExcepcion(e, 'No se pudo crear el plan de cuotas.'))
