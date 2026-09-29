@@ -136,6 +136,12 @@ export async function calcularConsumos(
   return consumos
 }
 
+/** Gastos que se piden de una vez para pintar la pantalla. */
+export const LIMITE_DETALLE = 1000
+
+/** Tope de páginas al exportar: 50.000 gastos en un mismo presupuesto. */
+const MAXIMO_PAGINAS_EXPORTACION = 50
+
 export interface DetallePresupuesto {
   presupuesto: Presupuesto
   /** Categoría del presupuesto y todas sus descendientes. */
@@ -144,6 +150,11 @@ export interface DetallePresupuesto {
   movimientos: Movimiento[]
   /** Suma de esos gastos; coincide con lo que devuelve `calcularConsumos`. */
   gastado: MontoPYG
+  /**
+   * La consulta llenó la página entera, así que puede haber más gastos
+   * detrás. La pantalla se conforma con estos; una exportación no.
+   */
+  posiblementeIncompleto: boolean
 }
 
 /**
@@ -171,11 +182,57 @@ export async function obtenerDetallePresupuesto(
     hasta: presupuesto.fecha_hasta,
     filtro: 'gastos',
     estados: ['confirmado'],
-    limite: 1000,
+    limite: LIMITE_DETALLE,
   })
 
   const movimientos = gastos.filter((m) => m.categoria_id && permitidas.has(m.categoria_id))
   const gastado = movimientos.reduce((total, m) => total + m.monto, 0)
 
-  return { presupuesto, categoriaIds, movimientos, gastado }
+  return {
+    presupuesto,
+    categoriaIds,
+    movimientos,
+    gastado,
+    posiblementeIncompleto: gastos.length >= LIMITE_DETALLE,
+  }
+}
+
+/**
+ * Todos los gastos del presupuesto, sin límite, para exportar.
+ *
+ * Si la pantalla no llegó a llenar la página, esos gastos YA son todos y se
+ * reutilizan tal cual. Solo cuando la consulta se topó con el límite se
+ * recorre el resto por páginas, con exactamente los mismos filtros: así un
+ * reporte nunca dice «todos los gastos» sobre una lista recortada.
+ */
+export async function obtenerGastosParaExportar(
+  detalle: DetallePresupuesto,
+): Promise<Movimiento[]> {
+  if (!detalle.posiblementeIncompleto) return detalle.movimientos
+
+  const permitidas = new Set(detalle.categoriaIds)
+  const todos: Movimiento[] = []
+  const vistos = new Set<UUID>()
+
+  for (let pagina = 0; pagina < MAXIMO_PAGINAS_EXPORTACION; pagina += 1) {
+    const lote = await listarMovimientos({
+      desde: detalle.presupuesto.fecha_desde,
+      hasta: detalle.presupuesto.fecha_hasta,
+      filtro: 'gastos',
+      estados: ['confirmado'],
+      limite: LIMITE_DETALLE,
+      desplazamiento: pagina * LIMITE_DETALLE,
+    })
+
+    // Si una página no trae nada nuevo, no hay más que recorrer. Protege de
+    // quedar dando vueltas si el servidor ignorase la paginación.
+    const nuevos = lote.filter((m) => !vistos.has(m.id))
+    if (nuevos.length === 0) break
+    for (const m of nuevos) vistos.add(m.id)
+
+    todos.push(...nuevos.filter((m) => m.categoria_id && permitidas.has(m.categoria_id)))
+    if (lote.length < LIMITE_DETALLE) break
+  }
+
+  return todos
 }

@@ -1,17 +1,21 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Pencil, Receipt } from 'lucide-react'
+import { FileSpreadsheet, FileText, Pencil, Receipt, Share2 } from 'lucide-react'
 import { Encabezado } from '../components/Encabezado'
 import { FilaOperacion } from '../components/FilaOperacion'
 import { Boton } from '../components/ui/Boton'
+import { Hoja } from '../components/ui/Hoja'
 import { Esqueleto, EstadoVacio, Mensaje } from '../components/ui/Estados'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { useCarga } from '../hooks/useCarga'
-import { obtenerDetallePresupuesto } from '../services/budgetsService'
+import { useAvisos } from '../hooks/useToast'
+import { obtenerDetallePresupuesto, obtenerGastosParaExportar } from '../services/budgetsService'
 import { agruparOperaciones } from '../utils/movimientos'
 import { formatearFecha } from '../utils/date'
 import { porcentaje } from '../utils/money'
 import type { UUID } from '../types/db'
+import type { ReportePresupuesto } from '../types/reportes'
+import { textoDeExcepcion } from '../lib/errors'
 import { usePrivacidad } from '../hooks/usePrivacidad'
 
 /**
@@ -23,7 +27,11 @@ export function PresupuestoDetallePage() {
   const { monto } = usePrivacidad()
   const { id = '' } = useParams()
   const navegar = useNavigate()
-  const { categorias, categoriaPorId } = useCatalogo()
+  const avisos = useAvisos()
+  const { categorias, categoriaPorId, cuentaPorId } = useCatalogo()
+
+  const [exportando, setExportando] = useState<'pdf' | 'excel' | null>(null)
+  const [hojaAbierta, setHojaAbierta] = useState(false)
 
   const { datos, cargando, error } = useCarga(
     () => obtenerDetallePresupuesto(id, categorias),
@@ -58,6 +66,80 @@ export function PresupuestoDetallePage() {
   const pct = porcentaje(gastado, limite)
   const clase = pct > 100 ? 'progreso__barra--excedido' : pct >= 80 ? 'progreso__barra--aviso' : ''
   const categoria = categoriaPorId(presupuesto?.categoria_id)
+
+  /**
+   * Arma el reporte con lo que YA está en pantalla: mismos movimientos, mismo
+   * cálculo y mismo desglose. Lo único que se pide aparte son las páginas que
+   * falten cuando la consulta de la pantalla se topó con su límite.
+   *
+   * Los importes van con sus valores reales aunque el modo privacidad esté
+   * activo: exportar es una acción explícita de quien usa la aplicación.
+   */
+  async function construirReporte(): Promise<ReportePresupuesto> {
+    if (!datos || !presupuesto) throw new Error('El presupuesto todavía no se cargó.')
+
+    const completos = await obtenerGastosParaExportar(datos)
+    const totalGastado = completos.reduce((suma, m) => suma + m.monto, 0)
+
+    const totales = new Map<UUID, number>()
+    for (const m of completos) {
+      if (!m.categoria_id) continue
+      totales.set(m.categoria_id, (totales.get(m.categoria_id) ?? 0) + m.monto)
+    }
+
+    return {
+      categoria: categoria?.nombre ?? 'Sin categoría',
+      desde: presupuesto.fecha_desde,
+      hasta: presupuesto.fecha_hasta,
+      limite: presupuesto.monto_limite,
+      gastado: totalGastado,
+      disponible: presupuesto.monto_limite - totalGastado,
+      porcentaje: porcentaje(totalGastado, presupuesto.monto_limite),
+      estado: presupuesto.activo ? 'activo' : 'desactivado',
+      porCategoria: [...totales.entries()]
+        .map(([categoriaId, monto]) => ({
+          nombre: categoriaPorId(categoriaId)?.nombre ?? 'Sin categoría',
+          monto,
+          porcentaje: porcentaje(monto, totalGastado),
+        }))
+        .sort((a, b) => b.monto - a.monto),
+      gastos: completos.map((m) => ({
+        fecha: m.fecha,
+        descripcion: m.descripcion?.trim() || 'Sin descripción',
+        categoria: categoriaPorId(m.categoria_id)?.nombre ?? 'Sin categoría',
+        cuenta: cuentaPorId(m.cuenta_id)?.nombre ?? 'Cuenta eliminada',
+        monto: m.monto,
+      })),
+    }
+  }
+
+  async function exportar(formato: 'pdf' | 'excel') {
+    if (exportando) return
+    setExportando(formato)
+    try {
+      const reporte = await construirReporte()
+      // jspdf y xlsx pesan bastante: se descargan al exportar, no al abrir
+      // el presupuesto.
+      const exportador = await import('../services/budgetExportService')
+      const resultado =
+        formato === 'pdf'
+          ? await exportador.compartirPresupuestoPdf(reporte)
+          : await exportador.compartirPresupuestoExcel(reporte)
+
+      if (resultado === 'descargado') avisos.exito('Archivo descargado.')
+      if (resultado === 'compartido') avisos.exito('Reporte compartido.')
+      if (resultado !== 'cancelado') setHojaAbierta(false)
+    } catch (e) {
+      avisos.error(
+        textoDeExcepcion(
+          e,
+          formato === 'pdf' ? 'No se pudo generar el PDF.' : 'No se pudo generar el Excel.',
+        ),
+      )
+    } finally {
+      setExportando(null)
+    }
+  }
 
   return (
     <>
@@ -210,6 +292,14 @@ export function PresupuestoDetallePage() {
               <Boton
                 variante="secundario"
                 bloque
+                icono={<Share2 size={17} aria-hidden="true" />}
+                onClick={() => setHojaAbierta(true)}
+              >
+                Compartir / Exportar
+              </Boton>
+              <Boton
+                variante="secundario"
+                bloque
                 icono={<Pencil size={17} aria-hidden="true" />}
                 onClick={() => navegar(`/presupuestos?editar=${presupuesto.id}`)}
               >
@@ -225,6 +315,41 @@ export function PresupuestoDetallePage() {
           </>
         )}
       </div>
+
+      <Hoja
+        abierta={hojaAbierta}
+        titulo="Compartir / Exportar"
+        onCerrar={() => (exportando ? undefined : setHojaAbierta(false))}
+      >
+        <div className="acciones-pila">
+          <Boton
+            variante="secundario"
+            bloque
+            cargando={exportando === 'pdf'}
+            disabled={exportando !== null}
+            icono={<FileText size={17} aria-hidden="true" />}
+            onClick={() => exportar('pdf')}
+          >
+            Compartir PDF
+          </Boton>
+          <Boton
+            variante="secundario"
+            bloque
+            cargando={exportando === 'excel'}
+            disabled={exportando !== null}
+            icono={<FileSpreadsheet size={17} aria-hidden="true" />}
+            onClick={() => exportar('excel')}
+          >
+            Compartir Excel
+          </Boton>
+        </div>
+
+        <p className="campo__ayuda" style={{ marginTop: 12 }}>
+          El reporte incluye el resumen, el desglose por categoría y todos los gastos del periodo,
+          con sus importes reales. Si tu teléfono lo permite se abrirá la hoja de compartir; si no,
+          el archivo se descarga.
+        </p>
+      </Hoja>
     </>
   )
 }
