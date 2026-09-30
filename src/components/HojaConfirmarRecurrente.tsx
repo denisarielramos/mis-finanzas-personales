@@ -57,7 +57,10 @@ export function HojaConfirmarRecurrente({ previsto, onCerrar, onConfirmado }: Pr
   useEffect(() => {
     if (!previsto) return
     setMonto(String(previsto.monto))
-    setFecha(previsto.fecha.slice(0, 10))
+    // La fecha real es la del pago, no la del vencimiento: al pagar por
+    // adelantado (o con retraso) el movimiento debe quedar fechado hoy.
+    // `previsto.fecha` solo se muestra como «Fecha esperada».
+    setFecha(hoyISO())
     setCuentaId(previsto.cuentaId ?? '')
     setDescripcion(previsto.descripcion ?? '')
     setNotas('')
