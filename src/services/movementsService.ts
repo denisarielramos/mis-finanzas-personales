@@ -29,6 +29,18 @@ const TIPOS_POR_FILTRO: Record<FiltroMovimientos, TipoMovimiento[] | null> = {
   transferencias: ['transferencia_salida', 'transferencia_entrada'],
 }
 
+/**
+ * Criterio de orden del listado.
+ *
+ * - `fecha`: historial contable, por fecha del movimiento (y `created_at`
+ *   para desempatar dentro del mismo día). Es el de la pantalla Movimientos.
+ * - `registro`: lo último que entró al sistema, por `created_at`, sin mirar
+ *   la fecha contable. Es el de «Últimos movimientos» del Dashboard: un
+ *   gasto fijo confirmado con fecha futura no debe tapar lo que se registró
+ *   después.
+ */
+export type OrdenMovimientos = 'fecha' | 'registro'
+
 export interface ConsultaMovimientos {
   desde?: FechaISO
   hasta?: FechaISO
@@ -39,6 +51,7 @@ export interface ConsultaMovimientos {
   incluirAnulados?: boolean
   limite?: number
   desplazamiento?: number
+  orden?: OrdenMovimientos
 }
 
 function normalizar(fila: Record<string, unknown>): Movimiento {
@@ -49,7 +62,7 @@ function normalizar(fila: Record<string, unknown>): Movimiento {
   }
 }
 
-/** Listado de movimientos ordenado por fecha (y `created_at` para desempatar). */
+/** Listado de movimientos, por fecha contable o por fecha de registro. */
 export async function listarMovimientos(opciones: ConsultaMovimientos = {}): Promise<Movimiento[]> {
   const {
     desde,
@@ -61,14 +74,16 @@ export async function listarMovimientos(opciones: ConsultaMovimientos = {}): Pro
     incluirAnulados = false,
     limite = 100,
     desplazamiento = 0,
+    orden = 'fecha',
   } = opciones
 
-  let consulta = supabase
-    .from('movimientos')
-    .select('*')
-    .order('fecha', { ascending: false })
-    .order('created_at', { ascending: false })
-    .range(desplazamiento, desplazamiento + limite - 1)
+  const base = supabase.from('movimientos').select('*')
+
+  let consulta = (
+    orden === 'registro'
+      ? base.order('created_at', { ascending: false })
+      : base.order('fecha', { ascending: false }).order('created_at', { ascending: false })
+  ).range(desplazamiento, desplazamiento + limite - 1)
 
   if (desde) consulta = consulta.gte('fecha', desde)
   if (hasta) consulta = consulta.lte('fecha', hasta)

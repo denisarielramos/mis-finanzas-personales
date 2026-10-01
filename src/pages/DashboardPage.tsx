@@ -43,7 +43,7 @@ export function DashboardPage() {
   )
 
   const ultimos = useCarga(
-    () => listarMovimientos({ limite: 12 }),
+    () => listarMovimientos({ limite: 12, orden: 'registro' }),
     [],
     'No se pudieron cargar los últimos movimientos.',
   )
@@ -74,8 +74,10 @@ export function DashboardPage() {
     () => saldos.filter((s) => s.activa).slice(0, 4),
     [saldos],
   )
+  // «Últimos» es por fecha de registro: el agrupado respeta ese mismo orden
+  // en vez de reordenar por fecha contable, como hace el historial.
   const operaciones = useMemo(
-    () => agruparOperaciones(ultimos.datos ?? []).slice(0, 5),
+    () => agruparOperaciones(ultimos.datos ?? [], 'registro').slice(0, 5),
     [ultimos.datos],
   )
 

@@ -36,11 +36,27 @@ export interface GrupoFecha {
   operaciones: Operacion[]
 }
 
-function ordenar(a: Operacion, b: Operacion): number {
+/**
+ * Criterio de orden, equivalente al de `listarMovimientos`.
+ *
+ * - `fecha`: historial contable (fecha del movimiento, `created_at` desempata).
+ * - `registro`: lo último registrado primero, sin mirar la fecha contable.
+ */
+export type OrdenOperaciones = 'fecha' | 'registro'
+
+function porFechaContable(a: Operacion, b: Operacion): number {
   if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1
   const creadoA = fechaCreacion(a)
   const creadoB = fechaCreacion(b)
   return creadoB.localeCompare(creadoA)
+}
+
+function porFechaDeRegistro(a: Operacion, b: Operacion): number {
+  const creadoA = fechaCreacion(a)
+  const creadoB = fechaCreacion(b)
+  if (creadoA !== creadoB) return creadoB.localeCompare(creadoA)
+  if (a.fecha === b.fecha) return 0
+  return a.fecha < b.fecha ? 1 : -1
 }
 
 function fechaCreacion(operacion: Operacion): string {
@@ -49,7 +65,10 @@ function fechaCreacion(operacion: Operacion): string {
 }
 
 /** Convierte una lista de movimientos en operaciones listas para mostrar. */
-export function agruparOperaciones(movimientos: Movimiento[]): Operacion[] {
+export function agruparOperaciones(
+  movimientos: Movimiento[],
+  orden: OrdenOperaciones = 'fecha',
+): Operacion[] {
   const transferencias = new Map<UUID, OperacionTransferencia>()
   const operaciones: Operacion[] = []
 
@@ -91,7 +110,7 @@ export function agruparOperaciones(movimientos: Movimiento[]): Operacion[] {
     })
   }
 
-  return operaciones.sort(ordenar)
+  return operaciones.sort(orden === 'registro' ? porFechaDeRegistro : porFechaContable)
 }
 
 /** Agrupa las operaciones por día, manteniendo el orden descendente. */
