@@ -146,6 +146,59 @@ export function signoDeMovimiento(movimiento: Movimiento): 'positivo' | 'negativ
   }
 }
 
+/**
+ * De dónde salió un movimiento, para mostrarlo como «Origen».
+ *
+ * No es la columna `origen` de la base (que solo distingue manual, importado,
+ * recurrente y sistema): un pago de cuota no tiene valor propio ahí. Por eso
+ * mandan los identificadores, que son inequívocos, y `origen` queda como
+ * respaldo. Se deduce de campos que la fila ya trae: no hace falta consultar
+ * el plan ni el recurrente.
+ */
+export type ProcedenciaMovimiento =
+  | 'cuota'
+  | 'fijo'
+  | 'recurrente'
+  | 'manual'
+  | 'importado'
+  | 'sistema'
+
+export function procedenciaDeMovimiento(movimiento: Movimiento): ProcedenciaMovimiento {
+  if (movimiento.cuota_plan_id) return 'cuota'
+  if (movimiento.recurrente_id) return movimiento.tipo === 'gasto' ? 'fijo' : 'recurrente'
+
+  switch (movimiento.origen) {
+    case 'importado':
+      return 'importado'
+    case 'sistema':
+      return 'sistema'
+    case 'recurrente':
+      return 'recurrente'
+    default:
+      return 'manual'
+  }
+}
+
+/**
+ * Texto del distintivo de la lista. Lo registrado a mano no lleva ninguno:
+ * es el caso normal y marcarlo solo añadiría ruido.
+ */
+export const DISTINTIVO_PROCEDENCIA: Partial<Record<ProcedenciaMovimiento, string>> = {
+  cuota: 'Cuota',
+  fijo: 'Fijo',
+  recurrente: 'Recurrente',
+}
+
+/** Texto de la fila «Origen» del detalle, donde sí se nombran todos. */
+export const NOMBRE_PROCEDENCIA: Record<ProcedenciaMovimiento, string> = {
+  cuota: 'Cuota',
+  fijo: 'Gasto fijo',
+  recurrente: 'Recurrente',
+  manual: 'Manual',
+  importado: 'Importado',
+  sistema: 'Sistema',
+}
+
 /** `true` si el movimiento puede editarse con `editar_movimiento`. */
 export function esEditableComoMovimiento(movimiento: Movimiento): boolean {
   return (

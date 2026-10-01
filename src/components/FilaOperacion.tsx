@@ -5,7 +5,12 @@ import { ETIQUETA_TIPO_MOVIMIENTO } from '../types/db'
 import { useCatalogo } from '../hooks/useCatalogo'
 import { formatearFechaConHora } from '../utils/date'
 import { iconoPorNombre } from './ui/SelectorIcono'
-import { signoDeMovimiento, type Operacion } from '../utils/movimientos'
+import {
+  DISTINTIVO_PROCEDENCIA,
+  procedenciaDeMovimiento,
+  signoDeMovimiento,
+  type Operacion,
+} from '../utils/movimientos'
 import { usePrivacidad } from '../hooks/usePrivacidad'
 
 const ICONO_POR_TIPO = {
@@ -36,6 +41,9 @@ function FilaMovimiento({ movimiento }: { movimiento: Movimiento }) {
 
   const detalle = [categoria?.nombre, cuenta?.nombre].filter(Boolean).join(' · ')
 
+  // Solo lo que no se registró a mano lleva distintivo.
+  const distintivo = DISTINTIVO_PROCEDENCIA[procedenciaDeMovimiento(movimiento)]
+
   return (
     <button
       type="button"
@@ -50,11 +58,14 @@ function FilaMovimiento({ movimiento }: { movimiento: Movimiento }) {
       </span>
 
       <span className="lista__cuerpo">
-        <span
-          className="lista__titulo"
-          style={anulado ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}
-        >
-          {titulo}
+        <span className="lista__encabezado">
+          <span
+            className="lista__titulo"
+            style={anulado ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}
+          >
+            {titulo}
+          </span>
+          {distintivo ? <span className="etiqueta etiqueta--mini">{distintivo}</span> : null}
         </span>
         <span className="lista__detalle">
           {detalle || 'Sin categoría'}

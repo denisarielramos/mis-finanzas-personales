@@ -11,7 +11,12 @@ import { useAvisos } from '../hooks/useToast'
 import { anularMovimiento, obtenerMovimiento } from '../services/movementsService'
 import { ETIQUETA_ESTADO_MOVIMIENTO, ETIQUETA_TIPO_MOVIMIENTO } from '../types/db'
 import { formatearFecha, formatearFechaHora } from '../utils/date'
-import { esEditableComoMovimiento, signoDeMovimiento } from '../utils/movimientos'
+import {
+  esEditableComoMovimiento,
+  NOMBRE_PROCEDENCIA,
+  procedenciaDeMovimiento,
+  signoDeMovimiento,
+} from '../utils/movimientos'
 import { textoDeExcepcion } from '../lib/errors'
 import { usePrivacidad } from '../hooks/usePrivacidad'
 
@@ -112,6 +117,12 @@ export function MovimientoDetallePage() {
                 <div className="datos__fila">
                   <span className="datos__clave">Notas</span>
                   <span className="datos__valor">{movimiento.notas || '—'}</span>
+                </div>
+                <div className="datos__fila">
+                  <span className="datos__clave">Origen</span>
+                  <span className="datos__valor">
+                    {NOMBRE_PROCEDENCIA[procedenciaDeMovimiento(movimiento)]}
+                  </span>
                 </div>
                 <div className="datos__fila">
                   <span className="datos__clave">Registrado</span>

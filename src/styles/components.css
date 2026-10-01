@@ -273,8 +273,18 @@
   flex-direction: column;
 }
 
+/* Título + distintivo de origen en una línea: el título se recorta con
+   puntos suspensivos y el distintivo nunca se encoge ni se parte. */
+.lista__encabezado {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .lista__titulo {
   display: block;
+  min-width: 0;
   font-size: 0.9375rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -420,6 +430,19 @@
 .etiqueta--info {
   background: var(--info-suave);
   color: var(--info);
+}
+
+/* Distintivo de origen dentro de una fila de lista: discreto por tamaño, no
+   por falta de contraste. Conserva los colores neutros de `.etiqueta`, que
+   ya se adaptan al modo oscuro. */
+.etiqueta--mini {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radio-sm);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.45;
 }
 
 /* ---------------------------- Control segmentado ----------------------- */
