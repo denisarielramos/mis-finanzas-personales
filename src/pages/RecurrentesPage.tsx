@@ -309,12 +309,12 @@ export function RecurrentesPage({ enfoque = 'todos' }: Props) {
   const esMensual = formulario?.frecuencia === 'mensual'
 
   /**
-   * Al crear un gasto fijo, la próxima fecha sigue al día de vencimiento
-   * elegido. Al editar no se toca: la fecha vigente la manda el RPC.
+   * Al cambiar explícitamente el vencimiento mensual se recalcula la próxima
+   * fecha. Así un cambio de esquema (por ejemplo, salario a fin de mes) queda
+   * reflejado de inmediato. La fecha real se sigue eligiendo al confirmar.
    */
   function nuevaProximaFecha(modoDia: ModoDia, diaMes: string): string {
     if (!formulario) return ''
-    if (!soloGastosFijos || formulario.id) return formulario.proximaFecha
     return proximaFechaPorDia(modoDia, diaMes)
   }
 
